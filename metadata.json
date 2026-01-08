@@ -1,0 +1,8 @@
+{
+  "name": "人物和背景图融合-2.0",
+  "description": "Blend your selfie into any background using Gemini 2.5 Flash Image, with text-based editing capabilities.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

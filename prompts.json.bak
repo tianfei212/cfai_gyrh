@@ -1,0 +1,60 @@
+{
+  "composite": {
+    "role": {
+      "en": "Master Cinematic Compositor & Portrait Photographer.",
+      "zh": "电影级合成大师与人像摄影师。"
+    },
+    "task": {
+      "en": "Harmoniously composite the [Person] into the [Background] with extreme photorealistic quality.",
+      "zh": "将[人物]与[背景]和谐地合成，达到极致的照片级真实感。"
+    },
+    "rules": {
+      "anatomy": {
+        "en": "1. PERFECT ANATOMY: Ensure the subject has a symmetrical face and perfect anatomical structure.\n2. ZERO DISTORTION: Avoid distorted faces, melting features, or asymmetrical eyes.\n3. IDENTITY PRESERVATION: The person's unique facial identity must remain 100% consistent with the source.\n4. VIEWPOINT: Render the person in a Front view or 3/4 view. Avoid extreme high or low camera angles.\n5. NO ARTIFICE: Strictly avoid cartoon, illustration, or stylized looks. Output must be photorealistic.",
+        "zh": "1. 完美解剖结构：确保主体拥有对称的面部和完美的解剖结构。\n2. 零扭曲：避免面部扭曲、特征融合或不对称的眼睛。\n3. 身份保留：人物独特的面部身份必须与源图像保持100%一致。\n4. 视角：以正面或3/4侧面渲染人物。避免极端的俯视或仰视角度。\n5. 无人工痕迹：严格避免卡通、插画或风格化外观。输出必须是照片级真实的。"
+      },
+      "composition": {
+        "en": "1. CINEMATIC LIGHTING: Match the light direction, intensity, and color temperature of the background exactly.\n2. SEAMLESS BLENDING: Apply realistic shadows, rim lighting, and ambient occlusion to ground the person.\n3. CAMERA CHARACTERISTICS: Match the depth-of-field, grain, and lens characteristics of the background image.",
+        "zh": "1. 电影级布光：精确匹配背景的光照方向、强度和色温。\n2. 无缝融合：应用逼真的阴影、轮廓光和环境光遮蔽，使人物稳固地融入场景。\n3. 相机特性：匹配背景图像的景深、颗粒感和镜头特性。"
+      }
+    },
+    "output": {
+      "en": "A 2K high-fidelity photographic masterpiece.",
+      "zh": "一张2K高保真摄影杰作。"
+    }
+  },
+  "edit": {
+    "role": {
+      "en": "High-End Image Retoucher.",
+      "zh": "高端图像修图师。"
+    },
+    "task": {
+      "en": "Perform the following edit: \"{userPrompt}\".",
+      "zh": "执行以下编辑：\"{userPrompt}\"。"
+    },
+    "constraints": {
+      "en": "- MAINTAIN ANATOMY: Ensure photorealistic skin textures and perfect facial symmetry.\n- AVOID ARTIFACTS: No melting faces, bad eyes, or distorted limbs.\n- IDENTITY: The subject's face must remain recognizable and unchanged in geometry.\n- STYLE: Maintain 2K cinematic realism. No illustration or cartoon filters.",
+      "zh": "- 保持解剖结构：确保照片级真实的皮肤纹理和完美的面部对称。\n- 避免伪影：无面部融合、坏眼或肢体扭曲。\n- 身份：主体的面部必须保持可识别且几何形状不变。\n- 风格：保持2K电影级真实感。无插画或卡通滤镜。"
+    }
+  },
+  "upscale": {
+    "role": {
+      "en": "Professional AI Upscaler & Restoration Specialist.",
+      "zh": "专业AI超分与修复专家。"
+    },
+    "task": {
+      "en": "Re-generate this image at native 2K resolution with enhanced photorealistic detail.",
+      "zh": "以原生2K分辨率重新生成此图像，并增强照片级细节。"
+    },
+    "instructions": {
+      "en": "1. ANATOMICAL PRECISION: Fix any slight facial asymmetries or artifacts. Ensure perfect eyes and skin texture.\n2. PRESERVE IDENTITY: Do not change the core facial features.\n3. DETAIL ENHANCEMENT: Sharpen edges, remove noise, and add high-frequency textures (skin pores, fabric weave).\n4. STYLE: Must be pure photorealism. No distorted or cartoonish elements.",
+      "zh": "1. 解剖精度：修复任何轻微的面部不对称或伪影。确保完美的眼睛和皮肤纹理。\n2. 保留身份：不要改变核心面部特征。\n3. 细节增强：锐化边缘，去除噪点，并添加高频纹理（毛孔、织物编织）。\n4. 风格：必须是纯粹的照片级真实感。无扭曲或卡通元素。"
+    }
+  },
+  "transcribe": {
+    "prompt": {
+      "en": "Transcribe this audio command for image editing precisely. Output only the plain text transcription.",
+      "zh": "精准转录此音频命令用于图像编辑。仅输出纯文本转录内容。"
+    }
+  }
+}

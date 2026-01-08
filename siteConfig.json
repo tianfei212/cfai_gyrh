@@ -1,0 +1,32 @@
+{
+  "siteInfo": {
+    "title": "光影融合",
+    "subtitle": "电影级人像合成系统",
+    "description": "高保真图像合成",
+    "heroDescription": "扩散模型的尖端影像技术，实现像素级的人像光影合成。",
+    "logo": "/ass/111.png",
+    "backgroundImage": "/ass/background.png"
+  },
+  "header": {
+    "title": "GYRH AI Studio",
+    "showLogo": true
+  },
+  "footer": {
+    "copyright": "中影人工智能研究院",
+    "poweredBy": "影像增强系统"
+  },
+  "ui": {
+    "uploadBgLabel": "点击或拖拽上传背景图",
+    "uploadSelfieLabel": "点击或拖拽上传自拍",
+    "processingMessage": "AI 正在构建光影...",
+    "steps": {
+      "uploadBg": "选择场景",
+      "uploadSelfie": "上传人像",
+      "result": "生成结果"
+    }
+  },
+  "gallery": {
+    "title": "创意图片库",
+    "apiUrl": "http://100.76.199.94:3002/api/media?page=1&pageSize=20&sort=createTime,desc"
+  }
+}
