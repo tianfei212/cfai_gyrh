@@ -25,16 +25,26 @@
   },
   "edit": {
     "role": {
-      "en": "High-End Image Retoucher.",
-      "zh": "高端图像修图师。"
+      "en": "High-End Image Retoucher, Semantic Segmentation & Spatial Depth Specialist.",
+      "zh": "高端图像修图师、语义分割与空间深度专家。"
     },
     "task": {
-      "en": "Perform the following edit: \"{userPrompt}\".",
-      "zh": "执行以下编辑：\"{userPrompt}\"。"
+      "en": "Perform the following edit or isolation task: \"{userPrompt}\".",
+      "zh": "执行以下编辑或分离任务：\"{userPrompt}\"。"
     },
     "constraints": {
-      "en": "- MAINTAIN ANATOMY: Ensure photorealistic skin textures and perfect facial symmetry.\n- AVOID ARTIFACTS: No melting faces, bad eyes, or distorted limbs.\n- IDENTITY: The subject's face must remain recognizable and unchanged in geometry.\n- STYLE: Maintain 2K cinematic realism. No illustration or cartoon filters.",
-      "zh": "- 保持解剖结构：确保照片级真实的皮肤纹理和完美的面部对称。\n- 避免伪影：无面部融合、坏眼或肢体扭曲。\n- 身份：主体的面部必须保持可识别且几何形状不变。\n- 风格：保持2K电影级真实感。无插画或卡通滤镜。"
+      "spatial_selection_logic": {
+        "en": "SELECTION PRIORITY (WHO TO CUT): 1. Interpret 'closest' strictly as Z-Depth 0 (physical proximity), regardless of facing direction. 2. A back-view silhouette in the foreground IS the subject. 3. Ignore all background figures even if they have clearer faces. 4. Use occlusion cues: the figure obstructing others is the target.",
+        "zh": "选择优先级（切谁）：1. 严格将'最近'解读为 Z-Depth 0（物理近距），无论朝向如何。2. 前景的背影轮廓即为主体。3. 忽略所有背景人物，即使他们的脸更清晰。4. 利用遮挡线索：遮挡他人的人物即为目标。"
+      },
+      "segmentation_quality": {
+        "en": "CUTOUT PRECISION (HOW TO CUT): 1. Generate cinema-grade alpha mattes. 2. HAIR & FINE DETAILS: Preserve individual conceptual hair strands and semi-transparent fabrics. 3. NO BLEED: Eliminate all background color spill from the edges. 4. CONTINUITY: Ensure the selected subject is a complete, solid mask without holes.",
+        "zh": "抠图精度（怎么切）：1. 生成电影级 Alpha 通道蒙版。2. 毛发与细节：保留概念上的单根发丝和半透明织物。3. 无溢色：消除边缘的所有背景杂色溢出。4. 连续性：确保所选主体是一个完整、实心的蒙版，中间无破洞。"
+      },
+      "anatomy_and_style": {
+        "en": "- MAINTAIN ANATOMY: Ensure photorealistic skin textures.\n- AVOID ARTIFACTS: Clean, anti-aliased edges.\n- STYLE: Maintain 2K cinematic realism.",
+        "zh": "- 保持解剖结构：确保照片级真实的皮肤纹理。\n- 避免伪影：边缘干净、抗锯齿。\n- 风格：保持2K电影级真实感。"
+      }
     }
   },
   "upscale": {

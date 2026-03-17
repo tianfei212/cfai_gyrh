@@ -1,0 +1,7 @@
+name: gryh
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - nodejs
+prefix: /root/miniconda3/envs/gryh

@@ -27,6 +27,6 @@
   },
   "gallery": {
     "title": "创意图片库",
-    "apiUrl": "http://100.76.199.94:3002/api/media?page=1&pageSize=20&sort=createTime,desc"
+    "apiUrl": "https://jjxo.chinafilmai.com/picGet/api/media?page=1&pageSize=20&sort=createTime,desc"
   }
 }
