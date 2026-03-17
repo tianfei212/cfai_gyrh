@@ -29,5 +29,32 @@
     "title": "创意图片库",
     "apiUrl": "https://jjxo.chinafilmai.com/picGet/api/media?page=1&pageSize=20&sort=createTime,desc"
   },
-  "To_API": "wan"
+  "To_API": "wan",
+  "resultActions": [
+    {
+      "label": "赛博朋克",
+      "action": "style_transfer",
+      "value": "把画面变成赛博朋克风格"
+    },
+    {
+      "label": "吉卜力",
+      "action": "style_transfer",
+      "value": "把画面变成吉卜力风格"
+    },
+    {
+      "label": "粘土定格动画风",
+      "action": "style_transfer",
+      "value": "把画面变成粘土定格动画风风格"
+    },
+    {
+      "label": "黑白线稿",
+      "action": "style_transfer",
+      "value": "把画面变成黑白线稿风格"
+    },
+    {
+      "label": "2K 超分",
+      "action": "upscale",
+      "icon": "zap"
+    }
+  ]
 }

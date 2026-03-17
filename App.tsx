@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { ImagePlus, Camera, Sparkles, RefreshCw, Download, ChevronRight, AlertCircle, Upload, FolderOpen, X, Trash2, Clock, Key, FileImage } from 'lucide-react';
+import { ImagePlus, Camera, Sparkles, RefreshCw, Download, ChevronRight, AlertCircle, Upload, FolderOpen, X, Trash2, Clock, Key, FileImage, Database } from 'lucide-react';
 import { ImageUploader } from './components/ImageUploader';
 import { CameraCapture } from './components/CameraCapture';
 import { ResultViewer } from './components/ResultViewer';
 import { PhotoGallery } from './components/PhotoGallery';
 import { HistorySidebar } from './components/HistorySidebar';
 import { CountdownTimer } from './components/CountdownTimer';
+import { DatabaseManager } from './components/DatabaseManager';
 import { generateComposite, editImage, upscaleImage } from './services/geminiService';
 import { generateWanImage, editWanImage } from './services/aliWanService';
 import { generatePose, PoseServiceType } from './services/poseService';
@@ -106,6 +107,7 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
       // @ts-ignore
       siteConfig.To_API === 'wan' ? 'wan' : 'google'
     );
+    const [isDatabaseOpen, setIsDatabaseOpen] = useState(false);
     
     // File System State (old_pic directory)
     const [oldPicFiles, setOldPicFiles] = useState<FileItem[]>([]);
@@ -414,7 +416,10 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
     >
       <div className="fixed inset-0 bg-black/60 pointer-events-none z-0" />
       
-      <header className="shrink-0 border-b border-white/10 backdrop-blur-md z-40 bg-zinc-950/80 h-16 lg:h-20">
+      {/* Invisible Trigger Strip */}
+      <div className="fixed top-0 left-0 right-0 h-4 z-[60] peer bg-transparent" />
+      
+      <header className="fixed top-0 left-0 right-0 z-50 transition-transform duration-300 -translate-y-full peer-hover:translate-y-0 hover:translate-y-0 bg-zinc-950/90 backdrop-blur-md border-b border-white/10 h-16 lg:h-20 shadow-2xl">
         <div className="w-full h-full px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {siteConfig.header.showLogo && (
@@ -439,11 +444,29 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
                 切换到 {apiType === 'google' ? 'AliWan' : 'Google'}
               </span>
             </button>
+            
+            <button
+              onClick={() => setIsDatabaseOpen(true)}
+              className="w-10 h-10 lg:w-12 lg:h-12 rounded-full border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-700/50 text-white transition-all flex items-center justify-center relative group backdrop-blur-sm bg-white/5"
+              title="图库管理"
+            >
+              <Database className="w-5 h-5 lg:w-6 lg:h-6 opacity-70 group-hover:opacity-100" />
+            </button>
           </div>
         </div>
       </header>
       
-      <main className="flex-1 flex flex-col w-full h-full relative z-10 p-6 lg:p-8 overflow-hidden gap-6">
+      {/* Database Manager Overlay */}
+      {isDatabaseOpen && (
+        <DatabaseManager 
+          onClose={() => {
+            setIsDatabaseOpen(false);
+            fetchOldPicFiles(); // Refresh sidebar when closing manager
+          }} 
+        />
+      )}
+
+      <main className="flex-1 flex flex-col w-full h-full relative z-10 p-6 lg:p-8 overflow-hidden gap-6 pt-6 lg:pt-8">
         {error && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-red-200 animate-in fade-in slide-in-from-top-2 shadow-2xl backdrop-blur-md">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />

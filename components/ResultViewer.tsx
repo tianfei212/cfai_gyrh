@@ -3,6 +3,7 @@ import { Download, Wand2, Send, Mic, MicOff, Loader2, Zap, X, ChevronUp, Chevron
 import { CountdownTimer } from './CountdownTimer';
 import { blobToBase64 } from '../utils/fileUtils';
 import { transcribeAudio } from '../services/geminiService';
+import siteConfig from '../siteConfig.json';
 
 interface ResultViewerProps {
   image: string;
@@ -164,7 +165,13 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
           alt="Generated Result" 
           className={`w-full h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
         />
-        {/* Watermark removed as it will be baked into the image during upscale */}
+        
+        {/* HUD Logo Overlay */}
+        <img 
+          src={siteConfig.siteInfo.logo || "/ass/111.png"}
+          alt="Logo"
+          className="absolute top-8 right-8 w-24 lg:w-32 2xl:w-40 object-contain opacity-80 pointer-events-none drop-shadow-lg z-10"
+        />
       </div>
 
       {/* Top Bar */}
@@ -175,13 +182,7 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
         >
           <X className="w-6 h-6 lg:w-8 lg:h-8 2xl:w-10 2xl:h-10" />
         </button>
-        <button 
-          onClick={onDownload}
-          className="pointer-events-auto flex items-center gap-2 lg:gap-3 px-4 py-2 lg:px-6 lg:py-3 2xl:px-8 2xl:py-4 bg-indigo-600/90 backdrop-blur-md hover:bg-indigo-500 text-white rounded-full font-medium lg:text-lg 2xl:text-xl transition-all shadow-lg"
-        >
-          <Download className="w-4 h-4 lg:w-5 lg:h-5 2xl:w-6 2xl:h-6" />
-          下载 2K 原图
-        </button>
+        {/* Download Button Removed */}
       </div>
 
       {/* Center Loading State */}
@@ -214,31 +215,34 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
             
             {/* Style Buttons */}
             <div className="flex-1 w-full grid grid-cols-2 sm:grid-cols-4 gap-2 lg:gap-4 2xl:gap-6">
-               {['赛博朋克', '吉卜力', '粘土定格动画风', '黑白线稿'].map((style) => (
+               {(siteConfig.resultActions || []).filter((action: any) => action.action === 'style_transfer').map((item: any) => (
                  <button
-                    key={style}
+                    key={item.label}
                     onClick={() => {
                       if (!isLoading) {
-                        onEdit(`把画面变成${style}风格`);
+                        onEdit(item.value);
                       }
                     }}
                     disabled={isLoading}
                     className="py-3 px-4 lg:py-4 lg:px-6 2xl:py-6 2xl:px-8 bg-transparent border border-white text-white rounded-xl text-sm lg:text-base 2xl:text-xl font-medium transition-all disabled:opacity-50 shadow-none hover:bg-transparent hover:border-white"
                  >
-                   {style}
+                   {item.label}
                  </button>
                ))}
             </div>
 
             {/* Upscale Button */}
+            {(siteConfig.resultActions || []).filter((action: any) => action.action === 'upscale').map((item: any) => (
             <button
+              key={item.label}
               onClick={onUpscale}
               disabled={isLoading}
               className="shrink-0 h-[52px] lg:h-[60px] 2xl:h-[80px] px-6 lg:px-8 2xl:px-12 bg-transparent border border-white text-white rounded-xl font-medium lg:text-lg 2xl:text-2xl flex items-center gap-2 lg:gap-3 transition-all disabled:opacity-50 shadow-none hover:bg-transparent hover:border-white"
             >
               <Zap className="w-4 h-4 lg:w-5 lg:h-5 2xl:w-8 2xl:h-8 text-yellow-400 fill-yellow-400" />
-              <span className="hidden sm:inline">2K 超分</span>
+              <span className="hidden sm:inline">{item.label}</span>
             </button>
+            ))}
           </div>
         </div>
       </div>
