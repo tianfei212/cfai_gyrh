@@ -28,5 +28,6 @@
   "gallery": {
     "title": "创意图片库",
     "apiUrl": "https://jjxo.chinafilmai.com/picGet/api/media?page=1&pageSize=20&sort=createTime,desc"
-  }
+  },
+  "To_API": "wan"
 }

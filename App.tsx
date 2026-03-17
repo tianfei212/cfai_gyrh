@@ -6,6 +6,7 @@ import { CameraCapture } from './components/CameraCapture';
 import { ResultViewer } from './components/ResultViewer';
 import { PhotoGallery } from './components/PhotoGallery';
 import { generateComposite, editImage, upscaleImage } from './services/geminiService';
+import { generateWanImage } from './services/aliWanService';
 import { blobToBase64 } from './utils/fileUtils';
 import { logToServer } from './utils/logger';
 import siteConfig from './siteConfig.json';
@@ -96,6 +97,11 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
     const [statusMessage, setStatusMessage] = useState<string>("");
     // Default to 'camera' mode as requested
     const [selfieMode, setSelfieMode] = useState<'camera' | 'upload'>('camera');
+    // API Switch state
+    const [apiType, setApiType] = useState<'google' | 'wan'>(
+      // @ts-ignore
+      siteConfig.To_API === 'wan' ? 'wan' : 'google'
+    );
     
     // File System State (old_pic directory)
     const [oldPicFiles, setOldPicFiles] = useState<FileItem[]>([]);
@@ -254,8 +260,18 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
     setError(null);
 
     try {
-      // Direct high-fidelity composition using Gemini
-      const finalResult = await generateComposite(bg, selfie);
+      let finalResult;
+      
+      // API Switch Logic
+      if (apiType === 'wan') {
+         logToServer("Using AliWan Service");
+         // AliWan: Person (Selfie) is 1st image, Background is 2nd image
+         finalResult = await generateWanImage(selfie, bg);
+      } else {
+         logToServer("Using Google Gemini Service");
+         // Gemini: Standard composition
+         finalResult = await generateComposite(bg, selfie);
+      }
 
       logToServer("Process Success: Composition");
       setResultImage(finalResult);
@@ -280,10 +296,24 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
     setError(null);
 
     try {
-      const finalResult = await editImage(resultImage, prompt);
+      if (apiType === 'wan') {
+        // AliWan supports same edit interface conceptually
+        // For now, we reuse Gemini for editing or implement Wan edit if available
+        // Assuming we fall back to Gemini for editing as Wan service was mainly for composition
+        // OR if you want to use Wan for editing:
+        // finalResult = await generateWanImage(resultImage, resultImage, prompt); // This might need adjustment
+        
+        // Current implementation: Fallback to Gemini for edit to keep it simple unless specified
+        const finalResult = await editImage(resultImage, prompt);
+        setResultImage(finalResult);
+        saveToOldPic(finalResult);
+      } else {
+        const finalResult = await editImage(resultImage, prompt);
+        setResultImage(finalResult);
+        saveToOldPic(finalResult);
+      }
+      
       logToServer("Process Success: Edit Image");
-      setResultImage(finalResult);
-      saveToOldPic(finalResult);
     } catch (err: any) {
       logToServer("Process Failed: Edit Image", { error: err.message }, "ERROR");
       setError("编辑失败，请尝试其他提示词。");
@@ -384,6 +414,18 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
                 <span className="hidden sm:inline">重新开始</span>
               </button>
             )}
+            
+            <button 
+              onClick={() => setApiType(prev => prev === 'google' ? 'wan' : 'google')}
+              className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-700 text-white font-bold transition-all flex items-center justify-center relative group"
+              title={`当前 API: ${apiType === 'google' ? 'Google Gemini' : 'AliWan 2.6'}`}
+            >
+              {apiType === 'google' ? 'G' : 'W'}
+              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                切换到 {apiType === 'google' ? 'AliWan' : 'Google'}
+              </span>
+            </button>
+
             <button onClick={() => setIsFileSystemOpen(true)} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors relative flex items-center gap-2" title="资源管理器">
               <FolderOpen className="w-5 h-5" />
               {oldPicFiles.length > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full ring-2 ring-zinc-900"></span>}
