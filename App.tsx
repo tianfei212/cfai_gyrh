@@ -5,6 +5,7 @@ import { ImageUploader } from './components/ImageUploader';
 import { CameraCapture } from './components/CameraCapture';
 import { ResultViewer } from './components/ResultViewer';
 import { PhotoGallery } from './components/PhotoGallery';
+import { HistorySidebar } from './components/HistorySidebar';
 import { generateComposite, editImage, upscaleImage } from './services/geminiService';
 import { generateWanImage } from './services/aliWanService';
 import { blobToBase64 } from './utils/fileUtils';
@@ -391,196 +392,163 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
 
   return (
     <div 
-      className="min-h-screen flex flex-col bg-zinc-950 text-white selection:bg-indigo-500/30 overflow-x-hidden bg-cover bg-center bg-no-repeat bg-fixed"
+      className="h-screen w-screen flex flex-col bg-zinc-950 text-white selection:bg-indigo-500/30 overflow-hidden bg-cover bg-center bg-no-repeat"
       style={{ 
         backgroundImage: `url('${siteConfig.siteInfo.backgroundImage}')`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
       }}
     >
       <div className="fixed inset-0 bg-black/60 pointer-events-none z-0" />
-      <header className="border-b border-white/10 backdrop-blur-md sticky top-0 z-40 bg-zinc-950/80">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      
+      <header className="shrink-0 border-b border-white/10 backdrop-blur-md z-40 bg-zinc-950/80 h-16 lg:h-20">
+        <div className="w-full h-full px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {siteConfig.header.showLogo && (
-              <img src={siteConfig.siteInfo.logo} alt={siteConfig.siteInfo.title} className="h-10 object-contain" onError={(e) => { console.error('Logo failed to load:', siteConfig.siteInfo.logo); e.currentTarget.style.display = 'none'; }} />
+              <img src={siteConfig.siteInfo.logo} alt={siteConfig.siteInfo.title} className="h-10 lg:h-12 object-contain" onError={(e) => { console.error('Logo failed to load:', siteConfig.siteInfo.logo); e.currentTarget.style.display = 'none'; }} />
             )}
           </div>
           <div className="flex items-center gap-4">
              {step !== AppStep.UPLOAD_BG && (
-              <button onClick={handleReset} className="text-sm text-zinc-400 hover:text-white transition-colors flex items-center gap-2">
-                <RefreshCw className="w-4 h-4" />
+              <button onClick={handleReset} className="text-sm lg:text-base text-zinc-400 hover:text-white transition-colors flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 lg:w-5 lg:h-5" />
                 <span className="hidden sm:inline">重新开始</span>
               </button>
             )}
             
             <button 
               onClick={() => setApiType(prev => prev === 'google' ? 'wan' : 'google')}
-              className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-700 text-white font-bold transition-all flex items-center justify-center relative group"
+              className="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-zinc-800 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-700 text-white font-bold transition-all flex items-center justify-center relative group text-sm lg:text-base"
               title={`当前 API: ${apiType === 'google' ? 'Google Gemini' : 'AliWan 2.6'}`}
             >
               {apiType === 'google' ? 'G' : 'W'}
-              <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+              <span className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                 切换到 {apiType === 'google' ? 'AliWan' : 'Google'}
               </span>
-            </button>
-
-            <button onClick={() => setIsFileSystemOpen(true)} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-full transition-colors relative flex items-center gap-2" title="资源管理器">
-              <FolderOpen className="w-5 h-5" />
-              {oldPicFiles.length > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full ring-2 ring-zinc-900"></span>}
             </button>
           </div>
         </div>
       </header>
-
-      {/* old_pic File System Sidebar */}
-      {isFileSystemOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity" onClick={() => setIsFileSystemOpen(false)} />
-          <div className="fixed right-0 top-0 h-full w-80 bg-zinc-900 border-l border-white/10 z-50 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col font-mono text-sm">
-            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-zinc-800/50">
-              <h2 className="font-semibold flex items-center gap-2 text-zinc-300">
-                <FolderOpen className="w-4 h-4 text-yellow-500" />
-                old_pic/
-              </h2>
-              <div className="flex items-center gap-2">
-                {oldPicFiles.length > 0 && (
-                  <button onClick={clearOldPic} className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors" title="清空">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-                <button onClick={() => setIsFileSystemOpen(false)} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-md transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-zinc-950">
-              {oldPicFiles.length === 0 ? (
-                <div className="text-center text-zinc-600 py-10 flex flex-col items-center gap-3">
-                  <FolderOpen className="w-10 h-10 opacity-20" />
-                  <p className="text-xs">文件夹为空</p>
-                </div>
-              ) : (
-                oldPicFiles.map((file, index) => (
-                  <div 
-                    key={index}
-                    onClick={() => openFile(file)}
-                    className={`group flex items-center gap-3 p-2 rounded cursor-pointer border border-transparent ${resultImage === file.data ? 'bg-indigo-900/30 border-indigo-500/30' : 'hover:bg-zinc-800 hover:border-zinc-700'}`}
-                  >
-                    <div className="w-10 h-10 shrink-0 bg-zinc-800 rounded overflow-hidden border border-zinc-700">
-                       <img src={file.data} alt="" className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-zinc-300 truncate font-mono text-xs">{file.name}</p>
-                      <p className="text-zinc-600 text-[10px]">{new Date(file.timestamp).toLocaleTimeString()}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="p-2 border-t border-white/10 bg-zinc-900 text-[10px] text-zinc-500 flex justify-between px-4">
-              <span>{oldPicFiles.length} 对象</span>
-              <span>本地存储</span>
-            </div>
-          </div>
-        </>
-      )}
-
-      <main className="flex-1 flex flex-col w-full max-w-[95%] xl:max-w-[90%] 2xl:max-w-[85%] mx-auto px-4 sm:px-6 py-8 relative z-10 pt-20">
+      
+      <main className="flex-1 flex flex-col w-full h-full relative z-10 p-6 lg:p-8 overflow-hidden gap-6">
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-red-200 animate-in fade-in slide-in-from-top-2">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-red-200 animate-in fade-in slide-in-from-top-2 shadow-2xl backdrop-blur-md">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             <p className="text-sm font-medium whitespace-pre-wrap">{error}</p>
           </div>
         )}
 
-        <div className="mb-8 lg:mb-12 flex items-center justify-center gap-4 text-sm lg:text-base 2xl:text-xl text-zinc-500">
+        {/* Progress Steps - Compact Version */}
+        <div className="shrink-0 flex items-center justify-center gap-4 text-sm lg:text-base text-zinc-500 h-8">
           <div className={`flex items-center gap-2 ${step === AppStep.UPLOAD_BG ? 'text-indigo-400 font-medium' : ''}`}>
-            <span className={`w-6 h-6 lg:w-8 lg:h-8 2xl:w-10 2xl:h-10 rounded-full flex items-center justify-center border ${step === AppStep.UPLOAD_BG ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700'}`}>1</span>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center border ${step === AppStep.UPLOAD_BG ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700'}`}>1</span>
             {siteConfig.ui.steps.uploadBg}
           </div>
-          <ChevronRight className="w-4 h-4 lg:w-5 lg:h-5 opacity-30" />
+          <ChevronRight className="w-4 h-4 opacity-30" />
           <div className={`flex items-center gap-2 ${step === AppStep.CAPTURE_SELFIE ? 'text-indigo-400 font-medium' : ''}`}>
-            <span className={`w-6 h-6 lg:w-8 lg:h-8 2xl:w-10 2xl:h-10 rounded-full flex items-center justify-center border ${step === AppStep.CAPTURE_SELFIE ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700'}`}>2</span>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center border ${step === AppStep.CAPTURE_SELFIE ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700'}`}>2</span>
             {siteConfig.ui.steps.uploadSelfie}
           </div>
-          <ChevronRight className="w-4 h-4 lg:w-5 lg:h-5 opacity-30" />
+          <ChevronRight className="w-4 h-4 opacity-30" />
           <div className={`flex items-center gap-2 ${step >= AppStep.PROCESSING ? 'text-indigo-400 font-medium' : ''}`}>
-            <span className={`w-6 h-6 lg:w-8 lg:h-8 2xl:w-10 2xl:h-10 rounded-full flex items-center justify-center border ${step >= AppStep.PROCESSING ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700'}`}>3</span>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center border ${step >= AppStep.PROCESSING ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700'}`}>3</span>
             {siteConfig.ui.steps.result}
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] lg:min-h-[600px] 2xl:min-h-[800px]">
-          {step === AppStep.UPLOAD_BG && (
-            <div className="w-full max-w-xl lg:max-w-2xl 2xl:max-w-4xl animate-in zoom-in-95 duration-300">
-              <div className="text-center mb-8 lg:mb-12">
-                <h2 className="text-3xl lg:text-4xl 2xl:text-5xl font-bold mb-2 lg:mb-4">{siteConfig.ui.steps.uploadBg}</h2>
-                <p className="text-zinc-400 lg:text-lg 2xl:text-xl">上传或拖拽一张背景图片。</p>
-              </div>
-              <ImageUploader onImageSelected={handleBgUpload} label={siteConfig.ui.uploadBgLabel} />
-              <PhotoGallery onSelectImage={handleBgUpload} />
-            </div>
-          )}
-
-          {step === AppStep.CAPTURE_SELFIE && (
-            <div className="w-full animate-in zoom-in-95 duration-300 flex flex-col items-center">
-              {selfieMode === 'upload' && (
-                <div className="text-center mb-6 lg:mb-10">
-                  <h2 className="text-3xl lg:text-4xl 2xl:text-5xl font-bold mb-2 lg:mb-4">{siteConfig.ui.steps.uploadSelfie}</h2>
-                  <p className="text-zinc-400 lg:text-lg 2xl:text-xl">请拍摄或上传一张正脸清晰的人物照片。</p>
+        {/* Content Grid */}
+        <div className="flex-1 grid grid-cols-12 gap-6 lg:gap-8 min-h-0">
+          
+          {/* Left / Main Column */}
+          <div className="col-span-8 flex flex-col h-full min-h-0 gap-6">
+            
+            {step === AppStep.UPLOAD_BG && (
+              <>
+                {/* Top: Upload Area (45%) */}
+                <div className="flex-[0.45] bg-zinc-900/50 border border-white/5 rounded-2xl p-6 lg:p-8 flex flex-col min-h-0">
+                   <div className="text-center mb-4 lg:mb-6 shrink-0">
+                    <h2 className="text-2xl lg:text-3xl font-bold mb-2">{siteConfig.ui.steps.uploadBg}</h2>
+                    <p className="text-zinc-400 text-sm lg:text-base">上传或拖拽一张背景图片。</p>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <ImageUploader onImageSelected={handleBgUpload} label={siteConfig.ui.uploadBgLabel} />
+                  </div>
                 </div>
-              )}
-              <div className="w-full flex justify-center">
-                {selfieMode === 'camera' ? (
-                   <CameraCapture onCapture={handleSelfieCapture} onClose={() => setSelfieMode('upload')} />
-                ) : (
-                   <div className="w-full max-w-xl lg:max-w-2xl 2xl:max-w-4xl">
-                      <ImageUploader onImageSelected={handleSelfieCapture} label={siteConfig.ui.uploadSelfieLabel} subLabel="请确保面部光线均匀" />
-                      <div className="mt-8 lg:mt-12 text-center">
-                        <button onClick={() => setSelfieMode('camera')} className="px-6 py-3 lg:px-8 lg:py-4 2xl:px-10 2xl:py-5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white font-medium lg:text-lg 2xl:text-xl transition-all flex items-center justify-center gap-2 mx-auto border border-white/10">
-                          <Camera className="w-4 h-4 lg:w-5 lg:h-5 2xl:w-6 2xl:h-6" />
-                          切换到相机拍摄
-                        </button>
-                      </div>
-                   </div>
+                
+                {/* Bottom: Gallery (55%) */}
+                <div className="flex-[0.55] bg-zinc-900/50 border border-white/5 rounded-2xl p-6 lg:p-8 flex flex-col min-h-0 overflow-hidden">
+                   <PhotoGallery onSelectImage={handleBgUpload} />
+                </div>
+              </>
+            )}
+
+            {step === AppStep.CAPTURE_SELFIE && (
+              <div className="flex-1 bg-zinc-900/50 border border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center animate-in zoom-in-95 duration-300">
+                {selfieMode === 'upload' && (
+                  <div className="text-center mb-8">
+                    <h2 className="text-3xl lg:text-4xl font-bold mb-4">{siteConfig.ui.steps.uploadSelfie}</h2>
+                    <p className="text-zinc-400 lg:text-lg">请拍摄或上传一张正脸清晰的人物照片。</p>
+                  </div>
                 )}
+                <div className="w-full h-full flex flex-col justify-center max-w-3xl">
+                  {selfieMode === 'camera' ? (
+                     <CameraCapture onCapture={handleSelfieCapture} onClose={() => setSelfieMode('upload')} />
+                  ) : (
+                     <div className="w-full">
+                        <ImageUploader onImageSelected={handleSelfieCapture} label={siteConfig.ui.uploadSelfieLabel} subLabel="请确保面部光线均匀" />
+                        <div className="mt-8 text-center">
+                          <button onClick={() => setSelfieMode('camera')} className="px-8 py-4 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-lg transition-all flex items-center justify-center gap-3 mx-auto border border-white/10 hover:scale-105">
+                            <Camera className="w-6 h-6" />
+                            切换到相机拍摄
+                          </button>
+                        </div>
+                     </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {step === AppStep.PROCESSING && (
-            <div className="flex flex-col items-center justify-center gap-6 lg:gap-10 animate-in fade-in duration-500">
-              <div className="relative">
-                <div className="w-24 h-24 lg:w-32 lg:h-32 2xl:w-48 2xl:h-48 rounded-full border-4 lg:border-8 border-indigo-500/30 animate-[spin_3s_linear_infinite]"></div>
-                <div className="w-24 h-24 lg:w-32 lg:h-32 2xl:w-48 2xl:h-48 rounded-full border-t-4 lg:border-t-8 border-indigo-500 absolute top-0 left-0 animate-spin"></div>
-                <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-400 w-8 h-8 lg:w-12 lg:h-12 2xl:w-16 2xl:h-16 animate-pulse" />
+            {step === AppStep.PROCESSING && (
+              <div className="flex-1 flex flex-col items-center justify-center gap-10 bg-zinc-900/30 rounded-2xl border border-white/5">
+                <div className="relative">
+                  <div className="w-32 h-32 lg:w-48 lg:h-48 rounded-full border-8 border-indigo-500/30 animate-[spin_3s_linear_infinite]"></div>
+                  <div className="w-32 h-32 lg:w-48 lg:h-48 rounded-full border-t-8 border-indigo-500 absolute top-0 left-0 animate-spin"></div>
+                  <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-400 w-12 h-12 lg:w-16 lg:h-16 animate-pulse" />
+                </div>
+                <div className="text-center">
+                  <h3 className="text-2xl lg:text-4xl font-bold text-white mb-4">正在施展 AI 魔法</h3>
+                  <p className="text-zinc-400 font-medium tracking-tight animate-pulse text-lg lg:text-xl">{statusMessage || siteConfig.ui.processingMessage}</p>
+                </div>
               </div>
-              <div className="text-center">
-                <h3 className="text-xl lg:text-2xl 2xl:text-3xl font-semibold text-white mb-1 lg:mb-2">正在施展 AI 魔法</h3>
-                <p className="text-zinc-400 font-medium tracking-tight animate-pulse lg:text-lg 2xl:text-xl">{statusMessage || siteConfig.ui.processingMessage}</p>
-              </div>
-            </div>
-          )}
+            )}
 
-          {step === AppStep.RESULT && resultImage && (
-             <ResultViewer 
-                image={resultImage} 
-                isProcessing={isProcessing}
-                onEdit={handleEdit}
-                onUpscale={handleUpscale}
-                onDownload={() => {
-                  const link = document.createElement('a');
-                  link.href = resultImage;
-                  const now = new Date();
-                  const timestampStr = now.toISOString().replace(/[-T:\.Z]/g, '').slice(0, 14);
-                  link.download = `composite_${timestampStr}.png`;
-                  link.click();
-                }}
-                onClose={() => setStep(AppStep.UPLOAD_BG)}
-              />
-          )}
+            {step === AppStep.RESULT && resultImage && (
+               <div className="flex-1 min-h-0 bg-black rounded-2xl overflow-hidden relative border border-white/10">
+                 <ResultViewer 
+                    image={resultImage} 
+                    isProcessing={isProcessing}
+                    onEdit={handleEdit}
+                    onUpscale={handleUpscale}
+                    onDownload={() => {
+                      const link = document.createElement('a');
+                      link.href = resultImage;
+                      const now = new Date();
+                      const timestampStr = now.toISOString().replace(/[-T:\.Z]/g, '').slice(0, 14);
+                      link.download = `composite_${timestampStr}.png`;
+                      link.click();
+                    }}
+                    onClose={() => setStep(AppStep.UPLOAD_BG)}
+                  />
+               </div>
+            )}
+          </div>
+
+          {/* Right Column: History Sidebar (Always Visible) */}
+          <div className="col-span-4 h-full min-h-0">
+             <HistorySidebar 
+                files={oldPicFiles} 
+                onSelect={openFile} 
+                resultImage={resultImage}
+             />
+          </div>
         </div>
       </main>
       

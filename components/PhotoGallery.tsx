@@ -33,7 +33,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ onSelectImage }) => 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize] = useState(5);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -193,94 +193,71 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({ onSelectImage }) => 
   }
 
   return (
-    <div className="w-full mt-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between mb-4 px-1 lg:mb-6 lg:px-2">
-        <h3 className="text-lg lg:text-xl 2xl:text-2xl font-semibold text-zinc-200 flex items-center gap-2 lg:gap-3">
-          <Image className="w-5 h-5 lg:w-6 lg:h-6 2xl:w-8 2xl:h-8 text-indigo-400" />
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex items-center justify-between mb-4 lg:mb-6 px-1 shrink-0">
+        <h3 className="text-lg lg:text-2xl 2xl:text-3xl font-semibold text-zinc-200 flex items-center gap-3">
+          <Image className="w-5 h-5 lg:w-7 lg:h-7 text-indigo-400" />
           {siteConfig.gallery.title}
           <button 
             onClick={() => fetchImages(1)} 
             disabled={loading}
-            className={`ml-1 p-1.5 lg:p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-all flex items-center justify-center ${loading ? 'animate-spin opacity-50 cursor-not-allowed' : ''}`}
+            className={`ml-2 p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-all flex items-center justify-center ${loading ? 'animate-spin opacity-50 cursor-not-allowed' : ''}`}
             title="刷新图库"
           >
-            <RefreshCw className="w-4 h-4 lg:w-5 lg:h-5 2xl:w-6 2xl:h-6" />
+            <RefreshCw className="w-4 h-4 lg:w-5 lg:h-5" />
           </button>
-          <div className="ml-2 flex items-center gap-2">
-            <button
-              onClick={() => fetchImages(Math.max(1, page - 1))}
-              disabled={loading || loadingMore || page <= 1}
-              className={`flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs ${page <= 1 || loading || loadingMore ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <ChevronLeft className="w-4 h-4" />
-              上一页
-            </button>
-            <button
-              onClick={() => fetchImages(Math.min(totalPages, page + 1))}
-              disabled={loading || loadingMore || page >= totalPages}
-              className={`flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs ${page >= totalPages || loading || loadingMore ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              下一页
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
         </h3>
-        <span className="text-xs lg:text-sm 2xl:text-base text-zinc-500">第 {page} / {totalPages} 页 · 每页 20 张</span>
+        <span className="text-xs lg:text-sm text-zinc-500 font-mono">第 {page} / {totalPages} 页</span>
       </div>
-      <div
-        ref={scrollRef}
-        className="flex overflow-x-auto gap-4 lg:gap-6 2xl:gap-8 pb-2 snap-x snap-proximity"
-      >
-        {images.map((item) => (
-          <div
-            key={item.id}
-            className="flex-none w-28 md:w-32 lg:w-36 2xl:w-44 snap-start"
-          >
+      
+      <div className="flex-1 min-h-0 relative">
+        <div
+          ref={scrollRef}
+          className="grid grid-cols-5 gap-4 lg:gap-6 2xl:gap-8 h-full items-start overflow-hidden content-start"
+        >
+          {images.map((item) => (
             <div
-              onClick={() => handleImageClick(item)}
-              className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer bg-zinc-800 border border-zinc-700/50 hover:border-indigo-500/50 transition-all hover:shadow-lg hover:shadow-indigo-500/10"
+              key={item.id}
+              className="w-full aspect-square"
             >
-              <img
-                src={`${BASE_URL}${item.thumbUrl}`}
-                alt={item.prompt}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-3 lg:p-4">
-                <p className="text-[10px] lg:text-xs 2xl:text-sm text-zinc-300 line-clamp-2 leading-tight">
-                  {item.prompt}
-                </p>
+              <div
+                onClick={() => handleImageClick(item)}
+                className="group relative w-full h-full rounded-xl overflow-hidden cursor-pointer bg-zinc-800 border-2 border-zinc-700/50 hover:border-indigo-500 hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] transition-all"
+              >
+                <img
+                  src={`${BASE_URL}${item.thumbUrl}`}
+                  alt={item.prompt}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Image className="w-8 h-8 text-white drop-shadow-lg" />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+          {loading && Array.from({ length: pageSize - images.length }).map((_, i) => (
+            <div key={`skeleton-${i}`} className="w-full aspect-square rounded-xl bg-zinc-800/50 animate-pulse" />
+          ))}
+        </div>
       </div>
-      <div className="w-full mt-4 flex items-center justify-center gap-4">
+
+      <div className="flex justify-between items-center mt-4 lg:mt-6 shrink-0 gap-4">
         <button
           onClick={() => fetchImages(Math.max(1, page - 1))}
           disabled={loading || loadingMore || page <= 1}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs ${page <= 1 || loading || loadingMore ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className="flex-1 py-3 lg:py-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:hover:bg-zinc-800 text-white transition-all flex items-center justify-center active:scale-95"
         >
-          <ChevronLeft className="w-4 h-4" />
-          上一页
+          <ChevronLeft className="w-5 h-5 lg:w-6 lg:h-6" />
         </button>
-        <span className="text-xs lg:text-sm text-zinc-400">
-          第 {page} / {totalPages} 页
-        </span>
         <button
           onClick={() => fetchImages(Math.min(totalPages, page + 1))}
           disabled={loading || loadingMore || page >= totalPages}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs ${page >= totalPages || loading || loadingMore ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className="flex-1 py-3 lg:py-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:hover:bg-zinc-800 text-white transition-all flex items-center justify-center active:scale-95"
         >
-          下一页
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-5 h-5 lg:w-6 lg:h-6" />
         </button>
       </div>
-      {loadingMore && (
-        <div className="w-full flex items-center justify-center py-3 text-zinc-400 text-xs">
-          正在加载下一页…
-        </div>
-      )}
     </div>
   );
 };

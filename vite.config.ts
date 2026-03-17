@@ -219,6 +219,51 @@ export default defineConfig(({ mode }) => {
             return;
           }
 
+          // Proxy API for downloading external images (bypassing CORS)
+          if (req.url?.startsWith('/api/proxy-image')) {
+            const urlObj = new URL(req.url, `http://${req.headers.host}`);
+            const targetUrl = urlObj.searchParams.get('url');
+
+            if (!targetUrl) {
+              res.statusCode = 400;
+              res.end(JSON.stringify({ error: 'Missing url parameter' }));
+              return;
+            }
+
+            try {
+              logToFile(`[INFO] Proxying image download: ${targetUrl}`);
+              
+              // Use fetch to get the image
+              const response = await fetch(targetUrl);
+              
+              if (!response.ok) {
+                logToFile(`[ERROR] Proxy fetch failed: ${response.status} ${response.statusText}`);
+                res.statusCode = response.status;
+                res.end(`Proxy fetch failed: ${response.statusText}`);
+                return;
+              }
+
+              // Copy headers
+              const contentType = response.headers.get('content-type');
+              if (contentType) res.setHeader('Content-Type', contentType);
+              const contentLength = response.headers.get('content-length');
+              if (contentLength) res.setHeader('Content-Length', contentLength);
+              
+              // Allow CORS for the frontend
+              res.setHeader('Access-Control-Allow-Origin', '*');
+
+              // Pipe the body
+              const arrayBuffer = await response.arrayBuffer();
+              res.end(Buffer.from(arrayBuffer));
+              logToFile(`[INFO] Proxy download success: ${targetUrl}`);
+            } catch (err: any) {
+              logToFile(`[ERROR] Proxy Image Failed: ${err.message}`);
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: 'Proxy failed', details: err.message }));
+            }
+            return;
+          }
+
           if (req.url === '/api/compose' && req.method === 'POST') {
             try {
               const body = await readBody();

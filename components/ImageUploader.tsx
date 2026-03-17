@@ -56,20 +56,19 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
   return (
     <div
-      className={`
-        relative group cursor-pointer
-        border-2 border-dashed rounded-2xl
-        p-8 lg:p-16 2xl:p-24
-        min-h-[300px] lg:min-h-[400px] 2xl:min-h-[500px]
-        flex flex-col items-center justify-center
-        transition-all duration-200 ease-in-out
-        bg-zinc-900/50
-        ${isDragging ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700 hover:border-indigo-400/50 hover:bg-zinc-800'}
-      `}
+      onClick={() => inputRef.current?.click()}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      onClick={() => inputRef.current?.click()}
+      className={`
+        w-full h-full relative group cursor-pointer
+        border-2 border-dashed rounded-xl
+        flex flex-col items-center justify-center
+        transition-all duration-200 ease-in-out
+        bg-zinc-900/30 hover:bg-zinc-800/50
+        p-2 sm:p-4 lg:p-6
+        ${isDragging ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-700 hover:border-indigo-400/50'}
+      `}
     >
       <input
         type="file"
@@ -80,18 +79,20 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       />
       
       <div className={`
-        p-4 lg:p-6 2xl:p-8 rounded-full mb-4 lg:mb-6 2xl:mb-8 transition-colors
+        p-2 lg:p-3 2xl:p-4 rounded-full mb-2 lg:mb-4 transition-colors shrink-0
         ${isDragging ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400 group-hover:text-indigo-400'}
       `}>
-        {isDragging ? <UploadCloud className="w-8 h-8 lg:w-12 lg:h-12 2xl:w-16 2xl:h-16" /> : <ImageIcon className="w-8 h-8 lg:w-12 lg:h-12 2xl:w-16 2xl:h-16" />}
+        {isDragging ? <UploadCloud className="w-5 h-5 lg:w-6 lg:h-6 2xl:w-8 2xl:h-8" /> : <ImageIcon className="w-5 h-5 lg:w-6 lg:h-6 2xl:w-8 2xl:h-8" />}
       </div>
       
-      <p className="text-lg lg:text-xl 2xl:text-2xl font-medium mb-2 text-center">
-        {isDragging ? '松开以上传' : label}
-      </p>
-      <p className="text-zinc-500 text-sm lg:text-base 2xl:text-lg text-center">
-        {subLabel}
-      </p>
+      <div className="text-center w-full px-4">
+        <p className="text-sm lg:text-base 2xl:text-lg font-medium mb-1 text-zinc-200 group-hover:text-white transition-colors truncate">
+          {isDragging ? '松开以上传' : label}
+        </p>
+        <p className="text-zinc-500 text-[10px] lg:text-xs 2xl:text-sm hidden sm:block truncate">
+          {subLabel}
+        </p>
+      </div>
     </div>
   );
 };
