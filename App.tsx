@@ -6,10 +6,13 @@ import { CameraCapture } from './components/CameraCapture';
 import { ResultViewer } from './components/ResultViewer';
 import { PhotoGallery } from './components/PhotoGallery';
 import { HistorySidebar } from './components/HistorySidebar';
+import { CountdownTimer } from './components/CountdownTimer';
 import { generateComposite, editImage, upscaleImage } from './services/geminiService';
-import { generateWanImage } from './services/aliWanService';
+import { generateWanImage, editWanImage } from './services/aliWanService';
+import { generatePose, PoseServiceType } from './services/poseService';
 import { blobToBase64 } from './utils/fileUtils';
 import { logToServer } from './utils/logger';
+import { addWatermark } from './utils/watermark';
 import siteConfig from './siteConfig.json';
 
 // Application Steps Enum
@@ -264,15 +267,18 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
       let finalResult;
       
       // API Switch Logic
-      if (apiType === 'wan') {
-         logToServer("Using AliWan Service");
-         // AliWan: Person (Selfie) is 1st image, Background is 2nd image
-         finalResult = await generateWanImage(selfie, bg);
-      } else {
-         logToServer("Using Google Gemini Service");
-         // Gemini: Standard composition
-         finalResult = await generateComposite(bg, selfie);
-      }
+      // Now using unified poseService for both Google and AliWan
+      // We need to pass 3 images: person (selfie), pose (selfie - using same image for pose reference for now), and background (bg)
+      // Assuming 'selfie' contains the person and also serves as the pose reference since user just took a photo
+      
+      const serviceType: PoseServiceType = apiType === 'wan' ? 'aliWan' : 'google';
+      logToServer(`Using ${serviceType} Pose Service`);
+      
+      // Call unified generatePose interface
+      // personImage: selfie (identity)
+      // poseImage: selfie (pose reference - user mimics the pose they want)
+      // bgImage: bg (scene)
+      finalResult = await generatePose(selfie, selfie, bg, serviceType);
 
       logToServer("Process Success: Composition");
       setResultImage(finalResult);
@@ -297,22 +303,20 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
     setError(null);
 
     try {
+      let finalResult;
+      
+      // Determine service based on current API configuration (initially from siteConfig.To_API)
+      // If wan, use AliWan model for editing. If google, use Gemini.
       if (apiType === 'wan') {
-        // AliWan supports same edit interface conceptually
-        // For now, we reuse Gemini for editing or implement Wan edit if available
-        // Assuming we fall back to Gemini for editing as Wan service was mainly for composition
-        // OR if you want to use Wan for editing:
-        // finalResult = await generateWanImage(resultImage, resultImage, prompt); // This might need adjustment
-        
-        // Current implementation: Fallback to Gemini for edit to keep it simple unless specified
-        const finalResult = await editImage(resultImage, prompt);
-        setResultImage(finalResult);
-        saveToOldPic(finalResult);
+        logToServer("Using AliWan Service for Edit");
+        finalResult = await editWanImage(resultImage, prompt);
       } else {
-        const finalResult = await editImage(resultImage, prompt);
-        setResultImage(finalResult);
-        saveToOldPic(finalResult);
+        logToServer("Using Google Service for Edit");
+        finalResult = await editImage(resultImage, prompt);
       }
+      
+      setResultImage(finalResult);
+      saveToOldPic(finalResult);
       
       logToServer("Process Success: Edit Image");
     } catch (err: any) {
@@ -332,10 +336,21 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
     setError(null);
 
     try {
-      const finalResult = await upscaleImage(resultImage);
+      const result = await upscaleImage(resultImage);
+      
+      // Add Watermark
+      logToServer("Adding Watermark to Upscaled Image");
+      const watermarkedResult = await addWatermark(
+        result, 
+        siteConfig.siteInfo.logo || '/ass/111.png', 
+        'bottom-right',
+        0.9,
+        0.2
+      );
+
       logToServer("Process Success: Upscale Image");
-      setResultImage(finalResult);
-      saveToOldPic(finalResult);
+      setResultImage(watermarkedResult);
+      saveToOldPic(watermarkedResult);
     } catch (err: any) {
       logToServer("Process Failed: Upscale Image", { error: err.message }, "ERROR");
       setError("超分失败，请稍后再试。");
@@ -490,7 +505,11 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
                 )}
                 <div className="w-full h-full flex flex-col justify-center max-w-3xl">
                   {selfieMode === 'camera' ? (
-                     <CameraCapture onCapture={handleSelfieCapture} onClose={() => setSelfieMode('upload')} />
+                     <CameraCapture 
+                        onCapture={handleSelfieCapture} 
+                        onClose={() => setSelfieMode('upload')} 
+                        bgImage={bgImage} // Pass the selected background for overlay
+                     />
                   ) : (
                      <div className="w-full">
                         <ImageUploader onImageSelected={handleSelfieCapture} label={siteConfig.ui.uploadSelfieLabel} subLabel="请确保面部光线均匀" />
@@ -508,11 +527,7 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
 
             {step === AppStep.PROCESSING && (
               <div className="flex-1 flex flex-col items-center justify-center gap-10 bg-zinc-900/30 rounded-2xl border border-white/5">
-                <div className="relative">
-                  <div className="w-32 h-32 lg:w-48 lg:h-48 rounded-full border-8 border-indigo-500/30 animate-[spin_3s_linear_infinite]"></div>
-                  <div className="w-32 h-32 lg:w-48 lg:h-48 rounded-full border-t-8 border-indigo-500 absolute top-0 left-0 animate-spin"></div>
-                  <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-indigo-400 w-12 h-12 lg:w-16 lg:h-16 animate-pulse" />
-                </div>
+                <CountdownTimer size={240} duration={120} />
                 <div className="text-center">
                   <h3 className="text-2xl lg:text-4xl font-bold text-white mb-4">正在施展 AI 魔法</h3>
                   <p className="text-zinc-400 font-medium tracking-tight animate-pulse text-lg lg:text-xl">{statusMessage || siteConfig.ui.processingMessage}</p>

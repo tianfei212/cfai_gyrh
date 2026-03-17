@@ -3,10 +3,11 @@ import { RefreshCw, Check, ChevronDown, Camera as CameraIcon, X, RefreshCcw, Ale
 
 interface CameraCaptureProps {
   onCapture: (base64: string) => void;
-  onClose?: () => void; // Optional close handler if needed
+  onClose?: () => void;
+  bgImage?: string | null; // Optional background image for overlay
 }
 
-export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose }) => {
+export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose, bgImage }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -159,8 +160,9 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose
       const ctx = canvas.getContext('2d');
       if (ctx) {
         // Correctly handle mirroring
-        ctx.translate(canvas.width, 0);
-        ctx.scale(-1, 1);
+        // User requested non-mirrored output (true-to-life)
+        // Preview is mirrored (scale-x(-1)) for UX, but capture should be normal
+        
         ctx.drawImage(video, 0, 0);
         
         const base64 = canvas.toDataURL('image/jpeg', 0.95);
@@ -224,33 +226,58 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose
       
       {/* Full Screen Video Feed */}
       <div className="absolute inset-0 w-full h-full">
+        {/* Background Overlay - Layer 0 (Bottom) */}
+        {bgImage && !capturedImage && (
+          <img 
+            src={bgImage} 
+            alt="Background Reference" 
+            className="absolute inset-0 w-full h-full object-cover opacity-100 z-0 pointer-events-none"
+          />
+        )}
+
+        {/* Camera Feed - Layer 1 (Middle) - Removed background-color to show image behind */}
         <video 
           ref={videoRef}
           autoPlay 
           playsInline 
           muted
-          className={`w-full h-full object-cover transform -scale-x-100 ${capturedImage ? 'hidden' : 'block'}`}
+          className={`w-full h-full object-cover transform -scale-x-100 relative z-10 ${capturedImage ? 'hidden' : 'block'}`}
+          // Apply mix-blend-mode or mask if needed, but for simple overlay, simple opacity might be better.
+          // However, user asked for "overlay on background", usually meaning the person is in front.
+          // Since we can't real-time remove background easily without heavy ML, we can try:
+          // 1. Just show background BEHIND video (if video has transparency? No)
+          // 2. Show background IN FRONT with low opacity (Ghost overlay) for alignment
+          // 3. Or user implies "Green Screen" effect?
+          // Re-reading request: "用同样大小的HUB的方式叠加上我们选择的背景图， 要在后景显示背景图"
+          // "Display background in the back scene" -> Implies background replacement or simple underlay?
+          // But video is opaque. So we can't see background unless video has opacity.
+          // Let's assume standard "Ghost/Reference" mode: Background is visible, Video is semi-transparent?
+          // OR: Video is main, Background is reference overlay?
+          // "要在后景显示背景图" -> Background at the back.
+          // So: [Background Image] -> [Video Feed (Opacity < 1)] -> [UI]
+          style={{ opacity: bgImage ? 0.8 : 1 }} 
         />
+        
         {capturedImage && (
           <img 
             src={capturedImage} 
             alt="Capture" 
-            className="w-full h-full object-contain bg-black"
+            className="w-full h-full object-contain bg-black relative z-20"
           />
         )}
       </div>
 
       {/* Top Controls Overlay */}
-      <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-10 bg-gradient-to-b from-black/60 to-transparent">
+      <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-30 bg-gradient-to-b from-black/60 to-transparent">
         <button 
           onClick={onClose || (() => window.location.reload())} // Fallback reload if no close provided
-          className="p-2 rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-white/20 transition-colors"
+          className="p-2 rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-white/20 transition-colors pointer-events-auto"
         >
           <X className="w-6 h-6" />
         </button>
 
         {!capturedImage && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pointer-events-auto">
             <button 
               onClick={() => { refreshDevices(); }}
               className="p-2 rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-white/20 transition-colors"
@@ -280,16 +307,16 @@ export const CameraCapture: React.FC<CameraCaptureProps> = ({ onCapture, onClose
       </div>
 
       {/* Bottom Controls Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 p-8 flex justify-center items-center z-10 bg-gradient-to-t from-black/80 to-transparent">
+      <div className="absolute bottom-0 left-0 right-0 p-8 flex justify-center items-center z-30 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
         {!capturedImage ? (
           <button
             onClick={handleCapture}
-            className="group relative flex items-center justify-center w-16 h-16 rounded-full border-4 border-white hover:border-indigo-400 hover:scale-105 transition-all shadow-lg shadow-black/50"
+            className="group relative flex items-center justify-center w-16 h-16 rounded-full border-4 border-white hover:border-indigo-400 hover:scale-105 transition-all shadow-lg shadow-black/50 pointer-events-auto"
           >
             <div className="w-12 h-12 bg-white rounded-full group-hover:bg-indigo-400 transition-colors" />
           </button>
         ) : (
-          <div className="flex gap-4 animate-in slide-in-from-bottom-4 fade-in">
+          <div className="flex gap-4 animate-in slide-in-from-bottom-4 fade-in pointer-events-auto">
             <button
               onClick={handleRetake}
               className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 text-white font-medium transition-colors border border-white/10"

@@ -21,11 +21,20 @@ const postJson = async (url: string, body: any) => {
 };
 
 // Helper to construct prompt from JSON
-const buildPrompt = (type: 'composite' | 'edit' | 'upscale', lang: 'en' | 'zh' = 'en', variables?: Record<string, string>) => {
+const buildPrompt = (type: 'composite' | 'edit' | 'upscale' | 'geminiPose', lang: 'en' | 'zh' = 'en', variables?: Record<string, string>) => {
   const p = prompts[type];
   let promptText = "";
 
-  if (type === 'composite') {
+  if (type === 'geminiPose') {
+    const g = p as typeof prompts.geminiPose;
+    promptText = `
+      ROLE: ${g.role[lang]}
+      TASK: ${g.task[lang]}
+      
+      INSTRUCTIONS:
+      ${g.instructions[lang]}
+    `;
+  } else if (type === 'composite') {
     const c = p as typeof prompts.composite;
     promptText = `
       ROLE: ${c.role[lang]}
@@ -64,6 +73,42 @@ const buildPrompt = (type: 'composite' | 'edit' | 'upscale', lang: 'en' | 'zh' =
   }
 
   return promptText.trim();
+};
+
+export const generateGeminiPose = async (
+  personImageBase64: string,
+  poseImageBase64: string,
+  bgImageBase64: string,
+  userPrompt?: string
+): Promise<string> => {
+  const startTime = Date.now();
+  
+  try {
+    const prompt = buildPrompt('geminiPose' as any, 'en', { userPrompt: userPrompt || '' });
+
+    logToServer("Google API Request - Generate Pose", { 
+      model: 'gemini-3-pro-image-preview',
+      prompt
+    });
+
+    // Reuse /api/compose endpoint but with different logic if needed
+    // Or create a new endpoint /api/pose if backend supports it
+    // For now, assuming backend /api/compose can handle 2 images + prompt
+    const data = await postJson('/api/compose', { 
+        bgBase64: bgImageBase64, // Use actual background
+        selfieBase64: personImageBase64,
+        poseBase64: poseImageBase64, // Pass pose image as additional param
+        prompt // Send specific pose prompt
+    });
+    
+    logToServer("Google API Response - Generate Pose", { durationMs: Date.now() - startTime });
+    if (data?.base64) return data.base64;
+    throw new Error("未获取到生成结果。");
+  } catch (error: any) {
+    logToServer("Google API Error - Generate Pose", { message: error.message, stack: error.stack }, "ERROR");
+    console.error("Gemini Pose Error:", error);
+    throw error;
+  }
 };
 
 export const generateComposite = async (bgBase64: string, selfieBase64: string): Promise<string> => {

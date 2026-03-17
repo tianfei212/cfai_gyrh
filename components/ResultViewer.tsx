@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Download, Wand2, Send, Mic, MicOff, Loader2, Zap, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { CountdownTimer } from './CountdownTimer';
 import { blobToBase64 } from '../utils/fileUtils';
 import { transcribeAudio } from '../services/geminiService';
 
@@ -163,12 +164,7 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
           alt="Generated Result" 
           className={`w-full h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
         />
-        {/* Watermark Overlay */}
-        <img 
-          src="/111.svg" 
-          alt="Watermark" 
-          className="absolute bottom-8 right-8 w-32 lg:w-48 2xl:w-64 object-contain z-20 opacity-90 pointer-events-none" 
-        />
+        {/* Watermark removed as it will be baked into the image during upscale */}
       </div>
 
       {/* Top Bar */}
@@ -192,7 +188,7 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
       {isProcessing && (
         <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
            <div className="bg-black/70 backdrop-blur-xl px-8 py-6 lg:px-12 lg:py-8 2xl:px-16 2xl:py-10 rounded-2xl flex flex-col items-center gap-4 lg:gap-6 text-white shadow-2xl border border-white/10">
-              <Loader2 className="w-10 h-10 lg:w-16 lg:h-16 2xl:w-20 2xl:h-20 animate-spin text-indigo-400" />
+              <CountdownTimer size={140} duration={120} />
               <p className="font-medium text-lg lg:text-2xl 2xl:text-3xl tracking-wide">AI 正在进行像素级重绘...</p>
            </div>
         </div>
