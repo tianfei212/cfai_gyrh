@@ -6,6 +6,9 @@ logs/
 *.log
 old_pic/
 .env
+.env.local
 *.local
 *.tmp
 /.trae/
+deploy/
+deploy_*.zip

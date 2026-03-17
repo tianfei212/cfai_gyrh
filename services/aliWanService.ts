@@ -6,8 +6,7 @@ import prompts from '../prompts.json';
 const ALIBABA_API_KEY = process.env.ALI_API_KEY || "";
 const BASE_URL = "https://dashscope.aliyuncs.com/api/v1";
 
-// 使用代理以绕过浏览器 CORS 限制
-const PROXY_URL = "https://corsproxy.io/?";
+// 移除不再使用的 PROXY_URL 变量
 
 const cleanBase64 = (base64: string) => {
   if (!base64) return "";
@@ -75,21 +74,37 @@ export const generateWanPose = async (
 
     logToServer("[DEBUG] AliWan Pose Request URL:", submitUrl);
     
-    const headers = {
-        'Authorization': `Bearer ${ALIBABA_API_KEY}`,
-        'Content-Type': 'application/json'
+    // 使用后端代理发请求
+    // Get the base URL dynamically based on current window location
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const localProxyUrl = `${baseUrl}/api/proxy-aliwan`;
+    
+    const proxyHeaders: any = {
+      'Content-Type': 'application/json',
+      'x-target-url': submitUrl
     };
+    
+    if (ALIBABA_API_KEY) {
+      proxyHeaders['x-api-key'] = ALIBABA_API_KEY;
+    }
 
-    const submitResponse = await fetch(`${PROXY_URL}${encodeURIComponent(submitUrl)}`, {
+    // [CRITICAL DEBUG] Print the exact request we are sending to our local proxy
+    logToServer(`[DEBUG] Fetching local proxy: ${localProxyUrl}`, {
+       method: 'POST',
+       headers: proxyHeaders,
+       bodySize: JSON.stringify(requestBody).length
+    });
+
+    const submitResponse = await fetch(localProxyUrl, {
       method: 'POST',
-      headers: headers,
+      headers: proxyHeaders,
       body: JSON.stringify(requestBody)
     });
 
     logToServer(`[DEBUG] AliWan Pose Response Status: ${submitResponse.status} ${submitResponse.statusText}`);
     
     const textResponse = await submitResponse.text();
-    logToServer(`[DEBUG] AliWan Pose Raw Response Body (First 500 chars): ${textResponse.substring(0, 500)}...`);
+    logToServer(`[DEBUG] AliWan Pose Raw Response Body (First 5000 chars): ${textResponse.substring(0, 5000)}...`);
 
     let submitData;
     try {
@@ -115,23 +130,36 @@ export const generateWanPose = async (
             throw new Error("任务成功但未找到图像 URL");
         }
         
-        logToServer("[DEBUG] AliWan Pose Result URL Found:", resultUrl);
-        
-        // Use Local Proxy
-        const localProxyUrl = `/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
-        let downloadResponse = await fetch(localProxyUrl);
-        
-        if (downloadResponse.status === 404) {
-             const publicProxyUrl = `${PROXY_URL}${encodeURIComponent(resultUrl)}`;
-             downloadResponse = await fetch(publicProxyUrl);
+        const normalizedResultUrl = typeof resultUrl === 'string' ? resultUrl.trim() : resultUrl;
+        logToServer("[DEBUG] AliWan Pose Result URL Found (Raw):", resultUrl);
+        logToServer("[DEBUG] AliWan Pose Result URL Found (Normalized):", normalizedResultUrl);
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+        const localProxyUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(normalizedResultUrl)}`;
+        logToServer("[DEBUG] AliWan Pose Download Proxy URL:", localProxyUrl);
+        let downloadResponse: Response;
+        try {
+          downloadResponse = await fetch(localProxyUrl);
+        } catch (downloadFetchError: any) {
+          logToServer("AliWan Pose Download Fetch Threw:", downloadFetchError?.message || String(downloadFetchError), "ERROR");
+          throw new Error(`AliWan Pose 下载请求失败: ${downloadFetchError?.message || 'Unknown Error'}`);
         }
-
+        logToServer(`[DEBUG] AliWan Pose Download Response Status: ${downloadResponse.status} ${downloadResponse.statusText}`);
+        const downloadHeaders: Record<string, string> = {};
+        downloadResponse.headers.forEach((v, k) => { downloadHeaders[k] = v; });
+        logToServer("[DEBUG] AliWan Pose Download Response Headers:", downloadHeaders);
         if (!downloadResponse.ok) {
             const errorText = await downloadResponse.text();
+            logToServer("[DEBUG] AliWan Pose Download Error Body:", errorText, "ERROR");
             throw new Error(`结果图像下载失败: ${downloadResponse.status} ${downloadResponse.statusText}`);
         }
-        
-        const blob = await downloadResponse.blob();
+        let blob: Blob;
+        try {
+          blob = await downloadResponse.blob();
+        } catch (blobError: any) {
+          logToServer("AliWan Pose Blob Read Failed:", blobError?.message || String(blobError), "ERROR");
+          throw new Error(`AliWan Pose 响应流读取失败: ${blobError?.message || 'Unknown Error'}`);
+        }
+        logToServer(`[DEBUG] AliWan Pose Download Blob Size: ${blob.size}, Type: ${blob.type}`);
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
@@ -194,20 +222,29 @@ export const generateWanImage = async (
     };
 
     logToServer("[DEBUG] AliWan Request URL:", submitUrl);
-    // Remove Async Header for synchronous attempt based on curl example
-    const headers = {
-        'Authorization': `Bearer ${ALIBABA_API_KEY}`,
-        'Content-Type': 'application/json'
+
+    // 使用后端代理发请求
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const localProxyUrl = `${baseUrl}/api/proxy-aliwan`;
+    
+    const proxyHeaders: any = {
+      'Content-Type': 'application/json',
+      'x-target-url': submitUrl
     };
     
-    logToServer("[DEBUG] AliWan Request Headers:", {
-      ...headers,
-      'Authorization': `Bearer ${ALIBABA_API_KEY.substring(0, 6)}...`
+    if (ALIBABA_API_KEY) {
+      proxyHeaders['x-api-key'] = ALIBABA_API_KEY;
+    }
+
+    logToServer(`[DEBUG] Fetching local proxy: ${localProxyUrl}`, {
+       method: 'POST',
+       headers: proxyHeaders,
+       bodySize: JSON.stringify(requestBody).length
     });
 
-    const submitResponse = await fetch(`${PROXY_URL}${encodeURIComponent(submitUrl)}`, {
+    const submitResponse = await fetch(localProxyUrl, {
       method: 'POST',
-      headers: headers,
+      headers: proxyHeaders,
       body: JSON.stringify(requestBody)
     });
 
@@ -259,17 +296,11 @@ export const generateWanImage = async (
             
             // 降级到代理
             // 本地代理地址
-            const localProxyUrl = `/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
+            const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+            const localProxyUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
             logToServer("[DEBUG] Attempting Local Proxy Download:", localProxyUrl);
 
             let downloadResponse = await fetch(localProxyUrl);
-            
-            // 如果本地代理失败（例如生产环境没有此路由），尝试公共代理作为最后的救命稻草
-            if (downloadResponse.status === 404) {
-                 logToServer("[WARN] Local proxy not found, falling back to corsproxy.io");
-                 const publicProxyUrl = `${PROXY_URL}${encodeURIComponent(resultUrl)}`;
-                 downloadResponse = await fetch(publicProxyUrl);
-            }
             
             // Log Proxy Headers for Debugging
             const headerObj: any = {};
@@ -309,10 +340,16 @@ export const generateWanImage = async (
 
     while (attempts < maxAttempts) {
       const statusUrl = `${BASE_URL}/tasks/${taskId}`;
-      const statusResponse = await fetch(`${PROXY_URL}${encodeURIComponent(statusUrl)}`, {
-        method: 'GET',
+      // Note: We'd need to add a generic proxy endpoint for GET requests if we want to poll from frontend,
+      // but typically we should rely on the synchronous POST response which is what we get above.
+      // For now, if we reach here, we try to use the same POST proxy as a fallback (which might not work for GET).
+      // Ideally, the polling logic should be moved entirely to the backend `server.js`.
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const statusResponse = await fetch(`${baseUrl}/api/proxy-aliwan`, {
+        method: 'POST', // or create a GET proxy
         headers: {
-          'Authorization': `Bearer ${ALIBABA_API_KEY}`
+          'x-api-key': ALIBABA_API_KEY,
+          'x-target-url': statusUrl
         }
       });
 
@@ -333,7 +370,9 @@ export const generateWanImage = async (
           }
 
           // 3. 通过代理下载结果图像以避免 CORS
-          const downloadResponse = await fetch(`${PROXY_URL}${encodeURIComponent(resultUrl)}`);
+          const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+          const localProxyUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
+          const downloadResponse = await fetch(localProxyUrl);
           if (!downloadResponse.ok) throw new Error("结果图像下载失败，请检查网络连接。");
           
           const blob = await downloadResponse.blob();
@@ -413,14 +452,28 @@ export const editWanImage = async (
 
     logToServer("[DEBUG] AliWan Edit Request URL:", submitUrl);
 
-    const headers = {
-        'Authorization': `Bearer ${ALIBABA_API_KEY}`,
-        'Content-Type': 'application/json'
+    // 使用后端代理发请求
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const localProxyUrl = `${baseUrl}/api/proxy-aliwan`;
+    
+    const proxyHeaders: any = {
+      'Content-Type': 'application/json',
+      'x-target-url': submitUrl
     };
+    
+    if (ALIBABA_API_KEY) {
+      proxyHeaders['x-api-key'] = ALIBABA_API_KEY;
+    }
 
-    const submitResponse = await fetch(`${PROXY_URL}${encodeURIComponent(submitUrl)}`, {
+    logToServer(`[DEBUG] Fetching local proxy: ${localProxyUrl}`, {
+       method: 'POST',
+       headers: proxyHeaders,
+       bodySize: JSON.stringify(requestBody).length
+    });
+
+    const submitResponse = await fetch(localProxyUrl, {
       method: 'POST',
-      headers: headers,
+      headers: proxyHeaders,
       body: JSON.stringify(requestBody)
     });
 
@@ -467,12 +520,10 @@ export const editWanImage = async (
             }
         } catch (directError) {
             logToServer("Direct download failed, falling back to proxy...", directError);
-            const localProxyUrl = `/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
+            const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+            const localProxyUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(resultUrl)}`;
             let downloadResponse = await fetch(localProxyUrl);
-            if (downloadResponse.status === 404) {
-                 const publicProxyUrl = `${PROXY_URL}${encodeURIComponent(resultUrl)}`;
-                 downloadResponse = await fetch(publicProxyUrl);
-            }
+            
             if (!downloadResponse.ok) {
                 throw new Error(`结果图像下载失败: ${downloadResponse.status}`);
             }

@@ -219,6 +219,50 @@ export default defineConfig(({ mode }) => {
             return;
           }
 
+          // Proxy API for external requests (like AliWan)
+          if (req.url?.startsWith('/api/proxy-aliwan')) {
+            const targetUrl = req.headers['x-target-url'] as string;
+            const apiKey = (req.headers['x-api-key'] as string) || process.env.ALI_API_KEY || env.ALI_API_KEY;
+
+            if (!targetUrl || !apiKey) {
+              res.statusCode = 400;
+              res.end(JSON.stringify({ error: 'Missing target url or api key' }));
+              return;
+            }
+
+            try {
+              const fetchOptions: RequestInit = {
+                method: req.method,
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json',
+                  ...(req.headers['x-dashscope-async'] ? { 'X-DashScope-Async': req.headers['x-dashscope-async'] as string } : {})
+                }
+              };
+
+              if (req.method !== 'GET' && req.method !== 'HEAD') {
+                 const body = await readBody();
+                 // Only set body if there's actually content
+                 if (body && Object.keys(body).length > 0) {
+                     fetchOptions.body = JSON.stringify(body);
+                 }
+              }
+              
+              const response = await fetch(targetUrl, fetchOptions);
+
+              const data = await response.text();
+              const contentType = response.headers.get('content-type') || 'application/json; charset=utf-8';
+              res.setHeader('Content-Type', contentType);
+              res.statusCode = response.status;
+              res.end(data);
+            } catch (err: any) {
+              logToFile(`[ERROR] Proxy AliWan Failed: ${err.message}`);
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: 'Proxy failed', details: err.message }));
+            }
+            return;
+          }
+
           // Proxy API for downloading external images (bypassing CORS)
           if (req.url?.startsWith('/api/proxy-image')) {
             const urlObj = new URL(req.url, `http://${req.headers.host}`);

@@ -393,7 +393,7 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
           </div>
           <h1 className="text-2xl font-bold text-white mb-3">光影重建 AI</h1>
           <p className="text-zinc-400 mb-8 leading-relaxed">
-            利用 <span className="text-indigo-400 font-semibold">Gemini 3 Pro</span> 尖端影像技术，实现像素级的人像光影合成。
+            利用 <span className="text-indigo-400 font-semibold">尖端影像技术</span>，实现像素级的人像光影合成。
           </p>
           <button 
             onClick={handleSelectKey}
@@ -437,11 +437,11 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
             <button 
               onClick={() => setApiType(prev => prev === 'google' ? 'wan' : 'google')}
               className="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-zinc-800 border border-zinc-700 hover:border-zinc-500 hover:bg-zinc-700 text-white font-bold transition-all flex items-center justify-center relative group text-sm lg:text-base"
-              title={`当前 API: ${apiType === 'google' ? 'Google Gemini' : 'AliWan 2.6'}`}
+              title={`当前 API: ${apiType === 'google' ? 'ZY20' : 'ZY21'}`}
             >
               {apiType === 'google' ? 'G' : 'W'}
               <span className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                切换到 {apiType === 'google' ? 'AliWan' : 'Google'}
+                切换到 {apiType === 'google' ? 'ZY20' : 'ZY21'}
               </span>
             </button>
             
@@ -504,7 +504,7 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
                 <div className="flex-[0.45] bg-zinc-900/50 border border-white/5 rounded-2xl p-6 lg:p-8 flex flex-col min-h-0">
                    <div className="text-center mb-4 lg:mb-6 shrink-0">
                     <h2 className="text-2xl lg:text-3xl font-bold mb-2">{siteConfig.ui.steps.uploadBg}</h2>
-                    <p className="text-zinc-400 text-sm lg:text-base">上传或拖拽一张背景图片。</p>
+                   
                   </div>
                   <div className="flex-1 min-h-0">
                     <ImageUploader onImageSelected={handleBgUpload} label={siteConfig.ui.uploadBgLabel} />

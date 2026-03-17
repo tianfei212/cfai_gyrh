@@ -52,9 +52,9 @@
       "value": "把画面变成黑白线稿风格"
     },
     {
-      "label": "2K 超分",
-      "action": "upscale",
-      "icon": "zap"
+      "label": "宫崎骏风格",
+      "action": "style_transfer",
+      "value": "Transform into Hayao Miyazaki style"
     }
   ]
 }
