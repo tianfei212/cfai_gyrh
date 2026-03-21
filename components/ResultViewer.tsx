@@ -309,19 +309,31 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
               <span className="hidden sm:inline">{item.label}</span>
             </button>
             ))}
-
-            <button
-              onClick={handleGenerateDownloadQr}
-              disabled={isLoading || isPreparingQr}
-              className="shrink-0 h-[52px] lg:h-[60px] 2xl:h-[80px] px-4 lg:px-6 2xl:px-8 bg-emerald-500/20 border border-emerald-400 text-emerald-200 rounded-xl font-medium lg:text-lg flex items-center gap-2 lg:gap-3 transition-all disabled:opacity-50 hover:bg-emerald-500/30"
-              title="生成下载二维码"
-            >
-              <Download className="w-4 h-4 lg:w-5 lg:h-5" />
-              <span className="hidden sm:inline">{isPreparingQr ? '生成中...' : '下载二维码'}</span>
-            </button>
           </div>
-          {qrError && <p className="mt-4 text-red-400 text-sm">{qrError}</p>}
+          {qrError && <p className="mt-4 text-red-400 text-sm text-center">{qrError}</p>}
         </div>
+      </div>
+
+      {/* Floating Download QR Code Button (HUD style) */}
+      <div className="absolute right-6 bottom-32 lg:right-10 lg:bottom-40 2xl:right-12 2xl:bottom-48 z-30 animate-in slide-in-from-right duration-500">
+        <button
+          onClick={handleGenerateDownloadQr}
+          disabled={isLoading || isPreparingQr}
+          className="group relative flex items-center justify-center w-12 h-12 lg:w-16 lg:h-16 2xl:w-20 2xl:h-20 bg-black/40 backdrop-blur-xl border border-white/20 hover:border-emerald-400/50 hover:bg-black/60 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-all duration-300 disabled:opacity-50"
+          title="生成下载二维码"
+        >
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          {isPreparingQr ? (
+            <div className="w-5 h-5 lg:w-7 lg:h-7 2xl:w-9 2xl:h-9 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <QrCode className="w-6 h-6 lg:w-8 lg:h-8 2xl:w-10 2xl:h-10 text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)] group-hover:scale-110 transition-transform duration-300" />
+          )}
+          
+          {/* Tooltip */}
+          <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg text-emerald-300 text-xs lg:text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all duration-300 pointer-events-none">
+            下载二维码
+          </div>
+        </button>
       </div>
 
       {isQrModalOpen && (
