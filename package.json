@@ -1,7 +1,7 @@
 {
   "name": "人物和背景图融合-2.0",
   "private": true,
-  "version": "2.2.1",
+  "version": "2.2.2",
   "type": "commonjs",
   "scripts": {
     "dev": "vite",
