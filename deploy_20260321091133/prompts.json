@@ -1,0 +1,142 @@
+{
+  "composite": {
+    "role": {
+      "en": "Master Cinematic Compositor & Portrait Photographer.",
+      "zh": "电影级合成大师与人像摄影师。"
+    },
+    "task": {
+      "en": "Insert the [Person] into the [Background] as a **new distinct subject**, positioning them **alongside** any existing figures without replacing them. Ensure the [Person] interacts naturally with the scene spatiality.",
+      "zh": "将[人物]与[背景]和谐地合成，达到极致的照片级真实感。"
+    },
+    "rules": {
+      "anatomy": {
+        "en": "NO REPLACEMENT: Do NOT replace, overlap, or overwrite any existing people in the background.\n2. SPATIAL POSITIONING: Place the subject in the empty space of the scene (e.g., next to the original subject, slightly behind, or in the foreground).\n3. SCALE MATCHING: Ensure the subject's scale is consistent with the depth of the scene.",
+        "zh": "1. 完美解剖结构：确保主体拥有对称的面部和完美的解剖结构。\n2. 零扭曲：避免面部扭曲、特征融合或不对称的眼睛。\n3. 身份保留：人物独特的面部身份必须与源图像保持100%一致。\n4. 视角：以正面或3/4侧面渲染人物。避免极端的俯视或仰视角度。\n5. 无人工痕迹：严格避免卡通、插画或风格化外观。输出必须是照片级真实的。"
+      },
+      "composition": {
+        "en": "1. CINEMATIC LIGHTING: Match the light direction, intensity, and color temperature of the background exactly.\n2. SEAMLESS BLENDING: Apply realistic shadows, rim lighting, and ambient occlusion to ground the person.\n3. CAMERA CHARACTERISTICS: Match the depth-of-field, grain, and lens characteristics of the background image.",
+        "zh": "1. 电影级布光：精确匹配背景的光照方向、强度和色温。\n2. 无缝融合：应用逼真的阴影、轮廓光和环境光遮蔽，使人物稳固地融入场景。\n3. 相机特性：匹配背景图像的景深、颗粒感和镜头特性。"
+      }
+    },
+    "output": {
+      "en": "A 2K high-fidelity photographic masterpiece.",
+      "zh": "一张2K高保真摄影杰作。"
+    }
+  },
+  "edit": {
+    "role": {
+      "en": "High-End Image Retoucher, Semantic Segmentation & Spatial Depth Specialist.",
+      "zh": "高端图像修图师、语义分割与空间深度专家。"
+    },
+    "task": {
+      "en": "Perform the following edit or isolation task: \"{userPrompt}\".",
+      "zh": "执行以下编辑或分离任务：\"{userPrompt}\"。"
+    },
+    "constraints": {
+      "spatial_selection_logic": {
+        "en": "SELECTION PRIORITY (WHO TO CUT): 1. Interpret 'closest' strictly as Z-Depth 0 (physical proximity), regardless of facing direction. 2. A back-view silhouette in the foreground IS the subject. 3. Ignore all background figures even if they have clearer faces. 4. Use occlusion cues: the figure obstructing others is the target.",
+        "zh": "选择优先级（切谁）：1. 严格将'最近'解读为 Z-Depth 0（物理近距），无论朝向如何。2. 前景的背影轮廓即为主体。3. 忽略所有背景人物，即使他们的脸更清晰。4. 利用遮挡线索：遮挡他人的人物即为目标。"
+      },
+      "segmentation_quality": {
+        "en": "CUTOUT PRECISION (HOW TO CUT): 1. Generate cinema-grade alpha mattes. 2. HAIR & FINE DETAILS: Preserve individual conceptual hair strands and semi-transparent fabrics. 3. NO BLEED: Eliminate all background color spill from the edges. 4. CONTINUITY: Ensure the selected subject is a complete, solid mask without holes.",
+        "zh": "抠图精度（怎么切）：1. 生成电影级 Alpha 通道蒙版。2. 毛发与细节：保留概念上的单根发丝和半透明织物。3. 无溢色：消除边缘的所有背景杂色溢出。4. 连续性：确保所选主体是一个完整、实心的蒙版，中间无破洞。"
+      },
+      "anatomy_and_style": {
+        "en": "- MAINTAIN ANATOMY: Ensure photorealistic skin textures.\n- AVOID ARTIFACTS: Clean, anti-aliased edges.\n- STYLE: Maintain 2K cinematic realism.",
+        "zh": "- 保持解剖结构：确保照片级真实的皮肤纹理。\n- 避免伪影：边缘干净、抗锯齿。\n- 风格：保持2K电影级真实感。"
+      }
+    }
+  },
+  "upscale": {
+    "role": {
+      "en": "Professional AI Upscaler & Restoration Specialist.",
+      "zh": "专业AI超分与修复专家。"
+    },
+    "task": {
+      "en": "Re-generate this image at native 2K resolution with enhanced photorealistic detail.",
+      "zh": "以原生2K分辨率重新生成此图像，并增强照片级细节。"
+    },
+    "instructions": {
+      "en": "1. ANATOMICAL PRECISION: Fix any slight facial asymmetries or artifacts. Ensure perfect eyes and skin texture.\n2. PRESERVE IDENTITY: Do not change the core facial features.\n3. DETAIL ENHANCEMENT: Sharpen edges, remove noise, and add high-frequency textures (skin pores, fabric weave).\n4. STYLE: Must be pure photorealism. No distorted or cartoonish elements.",
+      "zh": "1. 解剖精度：修复任何轻微的面部不对称或伪影。确保完美的眼睛和皮肤纹理。\n2. 保留身份：不要改变核心面部特征。\n3. 细节增强：锐化边缘，去除噪点，并添加高频纹理（毛孔、织物编织）。\n4. 风格：必须是纯粹的照片级真实感。无扭曲或卡通元素。"
+    }
+  },
+"aliWan": {
+    "role": {
+      "en": "Advanced Image Compositor & Identity Preservation Specialist",
+      "zh": "高级图像合成师与身份保留专家"
+    },
+    "task": {
+      "en": "Composite the subject from Image 1 into the background of Image 2. This is a strict photorealistic integration task.",
+      "zh": "将图1中的主体合成到图2的背景中。这是一项严格的照片级真实感融合任务。"
+    },
+    "constraints": {
+      "identity_preservation": {
+        "en": "IDENTITY ANCHOR: The subject's face, precise facial features, micro-expressions, and age must remain absolutely identical to Image 1. Highly detailed face, sharp focus, zero beautification, zero stylization, maintaining exact biometric proportions.",
+        "zh": "身份锚定：主体的面部、精确的面部特征、微表情和年龄必须与图1绝对一致。高细节面部，锐利对焦，零美化，零风格化，保持完全相同的生物特征比例。"
+      },
+      "appearance_preservation": {
+        "en": "RIGID POSE & TEXTURE: Lock the original skeletal pose, body language, and viewing angle. The fabric texture, folds, and exact hex colors of the clothing must be perfectly preserved without any modification.",
+        "zh": "刚性姿态与材质：锁定原始骨骼姿态、肢体语言和视场角。服装的面料纹理、褶皱和精确的颜色值必须完美保留，没有任何修改。"
+      },
+      "spatial_integration": {
+        "en": "CINEMATIC RELIGHTING: Apply Global Illumination (GI) and Ambient Occlusion (AO). The subject's lighting direction, color temperature, and rim lights must accurately reflect the background's light sources. Generate physically accurate cast shadows, soft drop shadows, and contact shadows where the subject meets the background.",
+        "zh": "电影级重打光与深度融合：必须重新计算人物的光照。强制应用背景的环境光遮蔽（AO）到人物身上。根据背景光源方向（如左侧/顶部/背光），在人物面部和身体上生成正确的高光和阴影。人物边缘必须有环境光漫射，严禁出现像剪纸一样的生硬边缘。在人物与地面接触处生成深色的接触阴影和投射阴影。"
+      },
+      "positioning": {
+        "en": "PERSPECTIVE MATCH: Ground the subject seamlessly into the background's vanishing point. Ensure correct depth of field (DoF) and focal length matching between the subject and the environment.",
+        "zh": "透视与景深匹配：调整人物的透视以匹配背景的消失点。如果背景有虚化，人物边缘也应有相应的景深过渡。让人物看起来是真正站在那个空间里，而不是贴在上面。"
+      }
+    },
+    "default_prompt": "RAW photo, photorealistic composite: seamlessly integrate the subject from Image 1 into the background of Image 2. RE-LIGHT the subject to match the background atmosphere. Generate realistic shadows and ambient occlusion. 8k resolution, cinematic lighting, masterpiece."
+  },
+  "aliWanPose": {
+    "role": {
+      "en": "Advanced Pose Transfer & Skeletal Structure Specialist",
+      "zh": "高级姿态迁移与骨骼结构专家"
+    },
+    "task": {
+      "en": "Generate a new image where the character adopts the exact pose provided in the reference image, while maintaining the character's original identity and clothing style.",
+      "zh": "生成一张新图像，其中人物采用参考图中提供的精确姿态，同时保持人物的原始身份和服装风格。"
+    },
+    "constraints": {
+      "pose_fidelity": {
+        "en": "SKELETAL LOCK: The output character must strictly follow the skeletal joints, limb angles, and body orientation of the pose reference image. No deviation in gesture or posture.",
+        "zh": "骨骼锁定：输出人物必须严格遵循姿态参考图的骨骼关节、肢体角度和身体朝向。手势或姿势不得有任何偏差。"
+      },
+      "identity_consistency": {
+        "en": "IDENTITY ANCHOR: The face and body proportions must remain 100% consistent with the source character image. Do not morph the identity into the pose reference person.",
+        "zh": "身份锚定：面部和身体比例必须与源人物图像保持100%一致。不要将身份变形为姿态参考图中的人物。"
+      },
+      "clothing_preservation": {
+        "en": "FABRIC PHYSICS: The clothing must drape naturally according to the new pose, but the style, texture, and color pattern must remain unchanged from the source character.",
+        "zh": "织物物理：服装必须根据新姿态自然垂坠，但款式、材质和颜色图案必须与源人物保持不变。"
+      },
+      "style_matching": {
+        "en": "COLOR & TONE MATCHING: The character MUST match the color grading, saturation, and film grain of the background image. If the background is Black & White, the character MUST be Black & White. If the background is sepia, the character MUST be sepia. STRICTLY ENFORCE background color palette on the subject.",
+        "zh": "色调与风格匹配：人物必须完全匹配背景图像的色调、饱和度和胶片颗粒感。如果背景是黑白的，人物必须是黑白的。如果背景是复古色调，人物也必须是复古色调。强制将背景的色彩调色板应用到人物主体上，严禁人物与背景色调分离。"
+      }
+    },
+    "default_prompt": "使用参考图中的姿态重新生成源人物。严格锁定骨骼关节和肢体角度。强制匹配背景图片的色调和风格（如黑白、复古等），如果背景是黑白，人物必须也是黑白。保持源人物的面部身份和服装细节不变。生成照片级真实感的高清图像。"
+  },
+  "geminiPose": {
+    "role": {
+      "en": "Master Visual Artist & Pose Transfer Expert",
+      "zh": "视觉艺术大师与姿态迁移专家"
+    },
+    "task": {
+      "en": "Reconstruct the character from Image 1 using the exact body pose and skeletal structure from Image 2. This is a high-fidelity pose transfer task.",
+      "zh": "使用图2的精确身体姿态和骨骼结构重构图1中的人物。这是一项高保真姿态迁移任务。"
+    },
+    "instructions": {
+      "en": "1. IDENTITY PRESERVATION: The face, hair, and body proportions must be identical to the character in Image 1.\n2. POSE ALIGNMENT: The character's limbs, head angle, and gesture must perfectly match the pose in Image 2.\n3. CLOTHING CONSISTENCY: The clothing style, fabric texture, and color from Image 1 must be preserved and naturally draped over the new pose.\n4. REALISM: Output a photorealistic 2K image with natural lighting and shadows.",
+      "zh": "1. 身份保留：面部、发型和身体比例必须与图1中的人物完全一致。\n2. 姿态对齐：人物的四肢、头部角度和手势必须完美匹配图2中的姿态。\n3. 服装一致性：图1中的服装款式、面料纹理和颜色必须保留，并自然垂坠在新的姿态上。\n4. 真实感：输出一张具有自然光影的照片级真实感2K图像。"
+    }
+  },
+  "transcribe": {
+    "prompt": {
+      "en": "Transcribe this audio command for image editing precisely. Output only the plain text transcription.",
+      "zh": "精准转录此音频命令用于图像编辑。仅输出纯文本转录内容。"
+    }
+  }
+}
