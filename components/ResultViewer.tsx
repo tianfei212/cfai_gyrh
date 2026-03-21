@@ -241,9 +241,9 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
           className="absolute top-8 right-8 w-24 lg:w-32 2xl:w-40 object-contain opacity-80 pointer-events-none drop-shadow-lg z-10"
         />
 
-        {/* HUD Download Button Overlay (Positioned in the lower right area of the screen, just above the tools panel) */}
+        {/* HUD Download Button Overlay (Positioned higher to avoid blocking the bottom toolbar buttons) */}
         {!isProcessing && (
-          <div className="absolute right-8 bottom-32 lg:right-12 lg:bottom-40 z-40">
+          <div className="absolute right-8 bottom-48 lg:right-12 lg:bottom-64 z-40">
             <button
               onClick={handleGenerateDownloadQr}
               disabled={isLoading || isPreparingQr}
