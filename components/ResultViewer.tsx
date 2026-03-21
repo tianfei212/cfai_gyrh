@@ -226,11 +226,31 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
       
       {/* Main Image Layer */}
       <div className="absolute inset-0 w-full h-full bg-black flex items-center justify-center">
-        <img 
-          src={image} 
-          alt="Generated Result" 
-          className={`w-full h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
-        />
+        <div className="relative h-full w-full flex items-center justify-center group/image">
+          <img 
+            src={image} 
+            alt="Generated Result" 
+            className={`w-full h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
+          />
+          
+          {/* HUD Download Button Overlay */}
+          {!isProcessing && (
+            <div className="absolute right-4 bottom-4 lg:right-8 lg:bottom-8 z-30 opacity-0 group-hover/image:opacity-100 transition-opacity duration-300">
+              <button
+                onClick={handleGenerateDownloadQr}
+                disabled={isLoading || isPreparingQr}
+                className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 bg-black/60 backdrop-blur-sm border border-white/40 hover:border-white hover:bg-black/80 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.4)] transition-all duration-300 disabled:opacity-50"
+                title="下载"
+              >
+                {isPreparingQr ? (
+                  <div className="w-5 h-5 lg:w-6 lg:h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <Download className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
+                )}
+              </button>
+            </div>
+          )}
+        </div>
         
         {/* HUD Logo Overlay */}
         <img 
@@ -309,20 +329,6 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
               <span className="hidden sm:inline">{item.label}</span>
             </button>
             ))}
-
-            {/* Download Icon Button in Toolbar */}
-            <button
-              onClick={handleGenerateDownloadQr}
-              disabled={isLoading || isPreparingQr}
-              className="shrink-0 w-[52px] h-[52px] lg:w-[60px] lg:h-[60px] 2xl:w-[80px] 2xl:h-[80px] flex items-center justify-center bg-transparent border border-white text-white rounded-xl transition-all disabled:opacity-50 hover:bg-white/10"
-              title="生成下载二维码"
-            >
-              {isPreparingQr ? (
-                <div className="w-5 h-5 lg:w-6 lg:h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <Download className="w-5 h-5 lg:w-6 lg:h-6 2xl:w-8 2xl:h-8" />
-              )}
-            </button>
           </div>
           {qrError && <p className="mt-4 text-red-400 text-sm text-center">{qrError}</p>}
         </div>
