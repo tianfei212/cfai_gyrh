@@ -226,31 +226,11 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
       
       {/* Main Image Layer */}
       <div className="absolute inset-0 w-full h-full bg-black flex items-center justify-center">
-        <div className="relative h-full w-full flex items-center justify-center">
-          <img 
-            src={image} 
-            alt="Generated Result" 
-            className={`max-w-full max-h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
-          />
-          
-          {/* Floating Download Icon ON the image (bottom right of the image container) */}
-          {!isProcessing && (
-            <div className="absolute right-4 bottom-4 lg:right-8 lg:bottom-8 z-30 animate-in fade-in zoom-in duration-500">
-              <button
-                onClick={handleGenerateDownloadQr}
-                disabled={isLoading || isPreparingQr}
-                className="group relative flex items-center justify-center w-12 h-12 lg:w-16 lg:h-16 bg-black/50 backdrop-blur-md border border-white/30 hover:border-white hover:bg-black/70 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.5)] transition-all duration-300 disabled:opacity-50"
-                title="保存/下载"
-              >
-                {isPreparingQr ? (
-                  <div className="w-5 h-5 lg:w-6 lg:h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <Download className="w-5 h-5 lg:w-7 lg:h-7 text-white drop-shadow-lg group-hover:scale-110 transition-transform duration-300" />
-                )}
-              </button>
-            </div>
-          )}
-        </div>
+        <img 
+          src={image} 
+          alt="Generated Result" 
+          className={`w-full h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
+        />
         
         {/* HUD Logo Overlay */}
         <img 
@@ -329,6 +309,20 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
               <span className="hidden sm:inline">{item.label}</span>
             </button>
             ))}
+
+            {/* Download Icon Button in Toolbar */}
+            <button
+              onClick={handleGenerateDownloadQr}
+              disabled={isLoading || isPreparingQr}
+              className="shrink-0 w-[52px] h-[52px] lg:w-[60px] lg:h-[60px] 2xl:w-[80px] 2xl:h-[80px] flex items-center justify-center bg-transparent border border-white text-white rounded-xl transition-all disabled:opacity-50 hover:bg-white/10"
+              title="生成下载二维码"
+            >
+              {isPreparingQr ? (
+                <div className="w-5 h-5 lg:w-6 lg:h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Download className="w-5 h-5 lg:w-6 lg:h-6 2xl:w-8 2xl:h-8" />
+              )}
+            </button>
           </div>
           {qrError && <p className="mt-4 text-red-400 text-sm text-center">{qrError}</p>}
         </div>
