@@ -226,30 +226,12 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
       
       {/* Main Image Layer */}
       <div className="absolute inset-0 w-full h-full bg-black flex items-center justify-center">
-        <div className="relative h-full w-full flex items-center justify-center group/image">
+        <div className="relative h-full w-full flex items-center justify-center">
           <img 
             src={image} 
             alt="Generated Result" 
-            className={`w-full h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
+            className={`max-w-full max-h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
           />
-          
-          {/* HUD Download Button Overlay */}
-          {!isProcessing && (
-            <div className="absolute right-4 bottom-4 lg:right-8 lg:bottom-8 z-30 opacity-0 group-hover/image:opacity-100 transition-opacity duration-300">
-              <button
-                onClick={handleGenerateDownloadQr}
-                disabled={isLoading || isPreparingQr}
-                className="flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 bg-black/60 backdrop-blur-sm border border-white/40 hover:border-white hover:bg-black/80 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.4)] transition-all duration-300 disabled:opacity-50"
-                title="下载"
-              >
-                {isPreparingQr ? (
-                  <div className="w-5 h-5 lg:w-6 lg:h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <Download className="w-5 h-5 lg:w-6 lg:h-6 text-white" />
-                )}
-              </button>
-            </div>
-          )}
         </div>
         
         {/* HUD Logo Overlay */}
@@ -258,6 +240,24 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
           alt="Logo"
           className="absolute top-8 right-8 w-24 lg:w-32 2xl:w-40 object-contain opacity-80 pointer-events-none drop-shadow-lg z-10"
         />
+
+        {/* HUD Download Button Overlay (Positioned in the lower right area of the screen, just above the tools panel) */}
+        {!isProcessing && (
+          <div className="absolute right-8 bottom-32 lg:right-12 lg:bottom-40 z-40">
+            <button
+              onClick={handleGenerateDownloadQr}
+              disabled={isLoading || isPreparingQr}
+              className="flex items-center justify-center w-14 h-14 lg:w-16 lg:h-16 bg-black/60 backdrop-blur-md border border-white/30 hover:border-white hover:bg-black/80 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.6)] transition-all duration-300 disabled:opacity-50 group"
+              title="保存/下载"
+            >
+              {isPreparingQr ? (
+                <div className="w-6 h-6 lg:w-7 lg:h-7 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Download className="w-6 h-6 lg:w-8 lg:h-8 text-white drop-shadow-lg group-hover:scale-110 transition-transform duration-300" />
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Top Bar */}
