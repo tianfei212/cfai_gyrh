@@ -226,6 +226,65 @@ app.post('/api/save-image', (req, res) => {
   }
 });
 
+app.get('/api/download-page', (req, res) => {
+  const fileUrl = String(req.query.url || '').trim();
+  const fileName = String(req.query.filename || `download_${Date.now()}.png`).trim();
+  if (!fileUrl) {
+    return res.status(400).send('Missing url parameter');
+  }
+  const safeFileUrl = fileUrl
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  const safeFileName = fileName
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>图片下载</title>
+  <style>
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#09090b;color:#e4e4e7;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+    .card{width:min(92vw,480px);background:rgba(24,24,27,.92);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:22px;box-sizing:border-box}
+    .title{margin:0 0 10px;font-size:22px;font-weight:700;color:#fff}
+    .desc{margin:0 0 16px;font-size:14px;line-height:1.7;color:#a1a1aa;word-break:break-all}
+    .preview{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#000;margin-bottom:16px;object-fit:contain;max-height:55vh}
+    .btn{width:100%;height:44px;border:0;border-radius:10px;background:#22c55e;color:#03240f;font-size:15px;font-weight:700;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 class="title">图片下载</h1>
+    <p class="desc">${safeFileUrl}</p>
+    <img class="preview" src="${safeFileUrl}" alt="预览图" />
+    <button id="downloadBtn" class="btn">下载图片</button>
+  </div>
+  <script>
+    const fileUrl = ${JSON.stringify(fileUrl)};
+    const fileName = ${JSON.stringify(fileName)};
+    const btn = document.getElementById('downloadBtn');
+    btn.addEventListener('click', function () {
+      const a = document.createElement('a');
+      a.href = fileUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+  </script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
 // Proxy API for external requests (like AliWan)
 const handleAliwanProxy = async (req, res) => {
   logToServer(`[DEBUG] AliWan proxy hit: ${req.method} ${req.originalUrl}`);
@@ -481,9 +540,18 @@ app.use('/old_pic', express.static(path.join(__dirname, 'old_pic')));
 // Serve Frontend (dist)
 app.use(express.static(path.join(__dirname, 'dist')));
 
+app.get('/download.html', (req, res, next) => {
+  const downloadPagePath = path.join(__dirname, 'dist', 'download.html');
+  if (fs.existsSync(downloadPagePath)) {
+    return res.sendFile(downloadPagePath);
+  }
+  return next();
+});
+
 // SPA Fallback
 app.use((req, res, next) => {
-  if (req.method === 'GET' && !req.path.startsWith('/api')) {
+  const hasFileExtension = Boolean(path.extname(req.path));
+  if (req.method === 'GET' && !req.path.startsWith('/api') && !hasFileExtension) {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
   } else {
     next();

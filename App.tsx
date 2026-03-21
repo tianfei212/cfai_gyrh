@@ -88,6 +88,34 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
   };
 
   const AppContent: React.FC = () => {
+    // Check if it's a download request
+    const urlParams = new URLSearchParams(window.location.search);
+    const downloadFile = urlParams.get('download');
+    
+    if (downloadFile) {
+      const imageUrl = `/old_pic/${downloadFile}`;
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-200 p-4 font-sans">
+          <div className="max-w-md w-full bg-zinc-900 border border-white/10 rounded-2xl p-6 flex flex-col items-center gap-6 shadow-2xl">
+            <h1 className="text-2xl font-bold text-white">图片下载</h1>
+            <p className="text-sm text-zinc-400 text-center">长按图片保存，或点击下方按钮下载</p>
+            <img 
+              src={imageUrl} 
+              alt="Download Preview" 
+              className="w-full rounded-xl border border-white/10 object-contain max-h-[55vh] bg-black" 
+            />
+            <a 
+              href={imageUrl} 
+              download={downloadFile}
+              className="w-full py-3 rounded-xl bg-green-500 hover:bg-green-400 text-black font-bold text-center transition-colors text-lg"
+            >
+              直接下载图片
+            </a>
+          </div>
+        </div>
+      );
+    }
+
     // Auth State
     const [hasApiKey, setHasApiKey] = useState(false);
     const [isCheckingKey, setIsCheckingKey] = useState(true);

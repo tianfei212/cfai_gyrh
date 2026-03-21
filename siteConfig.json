@@ -5,7 +5,8 @@
     "description": "高保真图像合成",
     "heroDescription": "扩散模型的尖端影像技术，实现像素级的人像光影合成。",
     "logo": "/ass/111.png",
-    "backgroundImage": "/ass/background.png"
+    "backgroundImage": "/ass/background.png",
+    "baseURL":"https://mqia.chinafilmai.com/"
   },
   "header": {
     "title": "GYRH AI Studio",

@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, Wand2, Send, Mic, MicOff, Loader2, Zap, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Copy, Download, QrCode, Zap, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { CountdownTimer } from './CountdownTimer';
 import { blobToBase64 } from '../utils/fileUtils';
 import { transcribeAudio } from '../services/geminiService';
+import { buildImageDownloadUrl } from './ImageDownloadPathBuilder';
+import { generateUrlQrCodeBase64 } from './UrlQrCodeGenerator';
 import siteConfig from '../siteConfig.json';
 
 interface ResultViewerProps {
@@ -26,6 +28,12 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isToolsOpen, setIsToolsOpen] = useState(true);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [qrImageBase64, setQrImageBase64] = useState('');
+  const [downloadPageUrl, setDownloadPageUrl] = useState('');
+  const [isPreparingQr, setIsPreparingQr] = useState(false);
+  const [qrError, setQrError] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -155,6 +163,64 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
 
   const isLoading = isProcessing || isTranscribing;
 
+  const ensureImagePath = async () => {
+    if (image.startsWith('/old_pic/')) return image;
+    if (image.startsWith('http://') || image.startsWith('https://')) return image;
+    if (image.startsWith('data:image')) {
+      const timestamp = new Date().toISOString().replace(/[-T:\.Z]/g, '').slice(0, 14);
+      const fileName = `img_qr_${timestamp}.png`;
+      const response = await fetch('/api/save-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: fileName,
+          data: image
+        })
+      });
+      if (!response.ok) {
+        throw new Error('图片保存失败');
+      }
+      return `/old_pic/${fileName}`;
+    }
+    return image;
+  };
+
+  const handleGenerateDownloadQr = async () => {
+    setQrError('');
+    setIsCopied(false);
+    try {
+      setIsPreparingQr(true);
+      const imagePath = await ensureImagePath();
+      const configBaseUrl = (siteConfig.siteInfo.baseURL || '').trim();
+      const runtimeBaseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const baseURL = configBaseUrl || runtimeBaseUrl;
+      
+      // Get the filename directly
+      const fileName = decodeURIComponent((imagePath.split('/').pop() || 'download.png').split('?')[0]);
+      
+      // Generate clean URL without nested jumps: /?download=filename.png
+      // Normalize base URL to ensure no trailing slash
+      const normalizedBaseUrl = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
+      const finalDownloadPageUrl = `${normalizedBaseUrl}/?download=${encodeURIComponent(fileName)}`;
+      
+      const qrBase64 = await generateUrlQrCodeBase64(finalDownloadPageUrl);
+      setDownloadPageUrl(finalDownloadPageUrl);
+      setQrImageBase64(qrBase64);
+      setIsQrModalOpen(true);
+    } catch (err: any) {
+      setQrError(err?.message || '生成二维码失败');
+    } finally {
+      setIsPreparingQr(false);
+    }
+  };
+
+  const handleCopyDownloadPageUrl = async () => {
+    if (!downloadPageUrl) return;
+    await navigator.clipboard.writeText(downloadPageUrl);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 1500);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center animate-in fade-in duration-500">
       
@@ -243,9 +309,70 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
               <span className="hidden sm:inline">{item.label}</span>
             </button>
             ))}
+
+            <button
+              onClick={handleGenerateDownloadQr}
+              disabled={isLoading || isPreparingQr}
+              className="shrink-0 h-[52px] lg:h-[60px] 2xl:h-[80px] px-4 lg:px-6 2xl:px-8 bg-emerald-500/20 border border-emerald-400 text-emerald-200 rounded-xl font-medium lg:text-lg flex items-center gap-2 lg:gap-3 transition-all disabled:opacity-50 hover:bg-emerald-500/30"
+              title="生成下载二维码"
+            >
+              <Download className="w-4 h-4 lg:w-5 lg:h-5" />
+              <span className="hidden sm:inline">{isPreparingQr ? '生成中...' : '下载二维码'}</span>
+            </button>
           </div>
+          {qrError && <p className="mt-4 text-red-400 text-sm">{qrError}</p>}
         </div>
       </div>
+
+      {isQrModalOpen && (
+        <div className="absolute inset-0 z-40 bg-black/75 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-2xl border border-white/15 bg-zinc-900/95 p-6 text-white">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-emerald-400" />
+                下载二维码
+              </h3>
+              <button
+                onClick={() => setIsQrModalOpen(false)}
+                className="p-2 rounded-lg hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="rounded-xl bg-white p-4 w-fit mx-auto mb-4">
+              <img src={qrImageBase64} alt="下载二维码" className="w-56 h-56 object-contain" />
+            </div>
+
+            <p className="text-zinc-300 text-sm leading-relaxed mb-3">
+              扫码后会进入下载页面，再点击页面中的下载按钮开始下载图片。
+            </p>
+
+            <div className="rounded-xl border border-zinc-700 bg-zinc-950/60 p-3 text-xs text-zinc-300 break-all mb-4">
+              {downloadPageUrl}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleCopyDownloadPageUrl}
+                className="flex-1 py-2 rounded-lg border border-zinc-600 hover:border-zinc-400 text-zinc-200 flex items-center justify-center gap-2"
+              >
+                <Copy className="w-4 h-4" />
+                {isCopied ? '已复制' : '复制链接'}
+              </button>
+              <a
+                href={downloadPageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-medium flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                打开下载页
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
