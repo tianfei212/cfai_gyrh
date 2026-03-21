@@ -226,11 +226,31 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
       
       {/* Main Image Layer */}
       <div className="absolute inset-0 w-full h-full bg-black flex items-center justify-center">
-        <img 
-          src={image} 
-          alt="Generated Result" 
-          className={`w-full h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
-        />
+        <div className="relative h-full w-full flex items-center justify-center">
+          <img 
+            src={image} 
+            alt="Generated Result" 
+            className={`max-w-full max-h-full object-contain transition-all duration-500 ${isProcessing ? 'opacity-50 blur-sm scale-95' : 'opacity-100 scale-100'}`}
+          />
+          
+          {/* Floating Download Icon ON the image (bottom right of the image container) */}
+          {!isProcessing && (
+            <div className="absolute right-4 bottom-4 lg:right-8 lg:bottom-8 z-30 animate-in fade-in zoom-in duration-500">
+              <button
+                onClick={handleGenerateDownloadQr}
+                disabled={isLoading || isPreparingQr}
+                className="group relative flex items-center justify-center w-12 h-12 lg:w-16 lg:h-16 bg-black/50 backdrop-blur-md border border-white/30 hover:border-white hover:bg-black/70 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.5)] transition-all duration-300 disabled:opacity-50"
+                title="保存/下载"
+              >
+                {isPreparingQr ? (
+                  <div className="w-5 h-5 lg:w-6 lg:h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <Download className="w-5 h-5 lg:w-7 lg:h-7 text-white drop-shadow-lg group-hover:scale-110 transition-transform duration-300" />
+                )}
+              </button>
+            </div>
+          )}
+        </div>
         
         {/* HUD Logo Overlay */}
         <img 
@@ -312,28 +332,6 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
           </div>
           {qrError && <p className="mt-4 text-red-400 text-sm text-center">{qrError}</p>}
         </div>
-      </div>
-
-      {/* Floating Download QR Code Button (HUD style) */}
-      <div className="absolute right-6 bottom-32 lg:right-10 lg:bottom-40 2xl:right-12 2xl:bottom-48 z-30 animate-in slide-in-from-right duration-500">
-        <button
-          onClick={handleGenerateDownloadQr}
-          disabled={isLoading || isPreparingQr}
-          className="group relative flex items-center justify-center w-12 h-12 lg:w-16 lg:h-16 2xl:w-20 2xl:h-20 bg-black/40 backdrop-blur-xl border border-white/20 hover:border-emerald-400/50 hover:bg-black/60 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-all duration-300 disabled:opacity-50"
-          title="生成下载二维码"
-        >
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          {isPreparingQr ? (
-            <div className="w-5 h-5 lg:w-7 lg:h-7 2xl:w-9 2xl:h-9 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
-          ) : (
-            <QrCode className="w-6 h-6 lg:w-8 lg:h-8 2xl:w-10 2xl:h-10 text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)] group-hover:scale-110 transition-transform duration-300" />
-          )}
-          
-          {/* Tooltip */}
-          <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg text-emerald-300 text-xs lg:text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all duration-300 pointer-events-none">
-            下载二维码
-          </div>
-        </button>
       </div>
 
       {isQrModalOpen && (
