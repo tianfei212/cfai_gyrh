@@ -198,10 +198,10 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({
       // Get the filename directly
       const fileName = decodeURIComponent((imagePath.split('/').pop() || 'download.png').split('?')[0]);
       
-      // Generate clean URL without nested jumps: /?download=filename.png
+      // Generate clean URL with explicit /download route: /download?file=filename.png
       // Normalize base URL to ensure no trailing slash
       const normalizedBaseUrl = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
-      const finalDownloadPageUrl = `${normalizedBaseUrl}/?download=${encodeURIComponent(fileName)}`;
+      const finalDownloadPageUrl = `${normalizedBaseUrl}/download?file=${encodeURIComponent(fileName)}`;
       
       const qrBase64 = await generateUrlQrCodeBase64(finalDownloadPageUrl);
       setDownloadPageUrl(finalDownloadPageUrl);

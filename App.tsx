@@ -89,10 +89,11 @@ class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, {hasErr
 
   const AppContent: React.FC = () => {
     // Check if it's a download request
+    const isDownloadRoute = window.location.pathname === '/download';
     const urlParams = new URLSearchParams(window.location.search);
-    const downloadFile = urlParams.get('download');
+    const downloadFile = urlParams.get('file');
     
-    if (downloadFile) {
+    if (isDownloadRoute && downloadFile) {
       const imageUrl = `/old_pic/${downloadFile}`;
       return (
         <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-200 p-4 font-sans">
