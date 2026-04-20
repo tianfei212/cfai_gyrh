@@ -41,8 +41,6 @@ type ComposeParams struct {
 	BackgroundImage string
 	// ReferenceImages 参考图映射（按 ImageType 索引）
 	ReferenceImages map[ImageType]string
-	// UserPrompt 用户 Prompt
-	UserPrompt string
 }
 
 // ComposeResult 光影融合结果
@@ -60,14 +58,16 @@ type GeminiHandler struct {
 	storage  storage.StorageService
 	apiKey   string
 	endpoint string
+	model    string
 }
 
 // NewGeminiHandler 创建 Gemini 处理器实例
-func NewGeminiHandler(storageSvc storage.StorageService) *GeminiHandler {
+func NewGeminiHandler(storageSvc storage.StorageService, model string) *GeminiHandler {
 	return &GeminiHandler{
 		storage:  storageSvc,
 		apiKey:   os.Getenv("GEMINI_API_KEY"),
 		endpoint: "https://generativelanguage.googleapis.com/v1beta/models",
+		model:    model,
 	}
 }
 
@@ -108,9 +108,9 @@ type Candidate struct {
 	Content Content `json:"content"`
 }
 
-// Compose 执行光影融合
-// Gemini 图像上传策略：优先 OSS，失败回退 Base64
-func (h *GeminiHandler) Compose(ctx context.Context, params *ComposeParams, skillContent string) (*ComposeResult, error) {
+// Compose 执行光影融合。
+// prompt 已经是上层整理好的最终文本，Gemini 侧不再重复拼装。
+func (h *GeminiHandler) Compose(ctx context.Context, params *ComposeParams, prompt string) (*ComposeResult, error) {
 	logger.Info("Gemini 光影融合开始: character=%s, background=%s",
 		params.CharacterImage, params.BackgroundImage)
 
@@ -119,9 +119,6 @@ func (h *GeminiHandler) Compose(ctx context.Context, params *ComposeParams, skil
 	if err != nil {
 		return nil, fmt.Errorf("组装 Payload 失败: %w", err)
 	}
-
-	// 构建 Prompt
-	prompt := h.buildPrompt(skillContent, params.UserPrompt)
 
 	// 构造 Gemini 请求
 	geminiReq := GeminiRequest{
@@ -269,29 +266,9 @@ func encodeImagePart(imageData []byte, mimeType string) *Part {
 	}
 }
 
-// buildPrompt 构建 Prompt
-func (h *GeminiHandler) buildPrompt(skillContent string, userPrompt string) string {
-	var prompt bytes.Buffer
-
-	// 添加 Skill 内容
-	if skillContent != "" {
-		prompt.WriteString("[Skill]\n")
-		prompt.WriteString(skillContent)
-		prompt.WriteString("\n[/Skill]\n\n")
-	}
-
-	// 添加用户 Prompt
-	prompt.WriteString("[User]\n")
-	prompt.WriteString(userPrompt)
-	prompt.WriteString("\n[/User]")
-
-	return prompt.String()
-}
-
 // sendRequest 发送请求到 Gemini API
 func (h *GeminiHandler) sendRequest(ctx context.Context, req GeminiRequest) (*GeminiResponse, error) {
-	modelName := "gemini-1.5-flash"
-	url := fmt.Sprintf("%s/%s:generateContent?key=%s", h.endpoint, modelName, h.apiKey)
+	url := fmt.Sprintf("%s/%s:generateContent?key=%s", h.endpoint, h.model, h.apiKey)
 
 	jsonData, err := json.Marshal(req)
 	if err != nil {

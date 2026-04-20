@@ -25,10 +25,15 @@ skill:
   import_trigger_file: ./configs/SKILL导入
   watch_interval_seconds: 5
 
+models:
+  gemini: gemini-1.5-flash
+  wan: wanx-plus
+  qwen: qwen3.6-plus
+
 alioss:
   enabled: true
   auto_start: true
-  binary_path: ./bin/oss-cli-darwin-arm64
+  binary_path: ./bin/oss-cli
   port: 18080
   openai_api_key: ""
   health_wait_seconds: 15

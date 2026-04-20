@@ -19,6 +19,7 @@ import (
 	"gyrh-go-v2/backend/internal/bootstrap"
 	"gyrh-go-v2/backend/internal/config"
 	"gyrh-go-v2/backend/internal/core/llm"
+	"gyrh-go-v2/backend/internal/core/llm/qwen"
 	"gyrh-go-v2/backend/internal/db"
 	"gyrh-go-v2/backend/internal/logger"
 	"gyrh-go-v2/backend/internal/oss"
@@ -62,11 +63,18 @@ func main() {
 	imageRepo := db.NewImageRepo(database)
 	referenceRepo := db.NewReferenceRepo(database)
 	skillRepo := db.NewSkillRepo(database)
+	llmPromptTemplateRepo := db.NewLLMPromptTemplateRepo(database)
+	backgroundPromptRepo := db.NewBackgroundPromptRepo(database)
 
-	llmService, err := llm.NewService(cfg, storageService, skillRepo)
+	if seedErr := qwen.EnsureDefaultTemplates(llmPromptTemplateRepo); seedErr != nil {
+		logger.Fatal("初始化 Qwen 默认 Prompt 模板失败: %v", seedErr)
+	}
+
+	llmService, err := llm.NewService(cfg, storageService, skillRepo, backgroundPromptRepo)
 	if err != nil {
 		logger.Fatal("初始化 LLM 服务失败: %v", err)
 	}
+	qwenAdvisor := qwen.NewAdvisor(storageService, llmPromptTemplateRepo, cfg.Models.Qwen, cfg.Storage.DashScopeAPIKey)
 
 	bootstrapService := bootstrap.New(cfg, skillRepo, imageRepo, storageService)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -76,12 +84,14 @@ func main() {
 	}
 	bootstrapService.StartWatchers(ctx)
 
-	imageHandler := handler.NewImageHandler(imageRepo, storageService, llmService, cfg)
+	imageHandler := handler.NewImageHandler(imageRepo, storageService, llmService)
 	referenceHandler := handler.NewReferenceHandler(referenceRepo, storageService)
 	skillHandler := handler.NewSkillHandler(skillRepo)
+	llmPromptTemplateHandler := handler.NewLLMPromptTemplateHandler(llmPromptTemplateRepo)
+	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor)
 
 	router := mux.NewRouter()
-	api.RegisterRoutes(router, imageHandler, referenceHandler, skillHandler, &middleware.AuthConfig{
+	api.RegisterRoutes(router, imageHandler, referenceHandler, skillHandler, llmPromptTemplateHandler, backgroundPromptHandler, &middleware.AuthConfig{
 		PrivateKeyFetcher: func(publicKey string) string {
 			if configuredPublicKey := os.Getenv("GYRH_AUTH_PUBLIC_KEY"); configuredPublicKey != "" && configuredPublicKey == publicKey {
 				return os.Getenv("GYRH_AUTH_PRIVATE_KEY")

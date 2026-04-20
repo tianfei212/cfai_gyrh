@@ -18,6 +18,8 @@ const (
 	ProviderWan StorageProvider = "wan"
 	// ProviderGoogle Google AI
 	ProviderGoogle StorageProvider = "google"
+	// ProviderQwen 通义千问视觉理解
+	ProviderQwen StorageProvider = "qwen"
 )
 
 // StorageService 存储服务接口
@@ -118,6 +120,8 @@ func (s *service) GetForModelUpload(ctx context.Context, assetID string, provide
 			return url, nil
 		}
 		return base64.StdEncoding.EncodeToString(data), nil
+	case ProviderQwen:
+		return s.dashscope.Upload(ctx, data, filepath.Base(assetID))
 	default:
 		return "", fmt.Errorf("不支持的模型提供者: %s", provider)
 	}

@@ -31,8 +31,8 @@ func NewDB(dataSourceName string) (*DB, error) {
 	}
 
 	// 设置连接池参数
-	db.SetMaxOpenConns(25)                  // 最大打开连接数
-	db.SetMaxIdleConns(5)                   // 最大空闲连接数
+	db.SetMaxOpenConns(25)                 // 最大打开连接数
+	db.SetMaxIdleConns(5)                  // 最大空闲连接数
 	db.SetConnMaxLifetime(5 * time.Minute) // 连接最大生命周期
 
 	// 验证数据库连接
@@ -108,12 +108,49 @@ func migrateTables(db *sql.DB) error {
 		return fmt.Errorf("创建 skill_files 表失败: %w", err)
 	}
 
+	// 创建 background_prompts 表（背景图提示词模板）
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS background_prompts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			gemini_prompt TEXT NOT NULL DEFAULT '',
+			gemini_negative_prompt TEXT NOT NULL DEFAULT '',
+			wan_prompt TEXT NOT NULL DEFAULT '',
+			wan_negative_prompt TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 background_prompts 表失败: %w", err)
+	}
+
+	// 创建 llm_prompt_templates 表（大模型提示词模板）
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS llm_prompt_templates (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			template_key TEXT NOT NULL,
+			content TEXT NOT NULL,
+			description TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 llm_prompt_templates 表失败: %w", err)
+	}
+
 	// 创建索引以提高查询性能
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_generated_images_created_at ON generated_images(created_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_reference_images_image_type ON reference_images(image_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_skill_files_provider ON skill_files(provider)`,
 		`CREATE INDEX IF NOT EXISTS idx_skill_files_is_active ON skill_files(is_active)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_background_prompts_name ON background_prompts(name)`,
+		`CREATE INDEX IF NOT EXISTS idx_background_prompts_updated_at ON background_prompts(updated_at)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_prompt_templates_key ON llm_prompt_templates(template_key)`,
+		`CREATE INDEX IF NOT EXISTS idx_llm_prompt_templates_updated_at ON llm_prompt_templates(updated_at)`,
 	}
 
 	for _, idx := range indexes {

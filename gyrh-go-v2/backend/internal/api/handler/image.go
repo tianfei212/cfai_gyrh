@@ -5,10 +5,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
-	"image/color"
-	"image/png"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -16,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"gyrh-go-v2/backend/internal/config"
 	"gyrh-go-v2/backend/internal/core/llm"
 	"gyrh-go-v2/backend/internal/db"
 	"gyrh-go-v2/backend/internal/logger"
@@ -28,16 +26,14 @@ type ImageHandler struct {
 	imageRepo      *db.ImageRepo          // 图像数据库仓库
 	storageService storage.StorageService // 存储服务
 	llmService     llm.Service            // 大模型服务
-	config         *config.Config         // 全局配置
 }
 
 // NewImageHandler 创建图像处理器实例
-func NewImageHandler(imageRepo *db.ImageRepo, storageService storage.StorageService, llmService llm.Service, cfg *config.Config) *ImageHandler {
+func NewImageHandler(imageRepo *db.ImageRepo, storageService storage.StorageService, llmService llm.Service) *ImageHandler {
 	return &ImageHandler{
 		imageRepo:      imageRepo,
 		storageService: storageService,
 		llmService:     llmService,
-		config:         cfg,
 	}
 }
 
@@ -313,11 +309,13 @@ type ReferenceItem struct {
 
 // RewriteRequest 图像改写请求参数
 type RewriteRequest struct {
-	Foreground string          `json:"foreground"` // 可选，Base64 编码的前景图
-	Background string          `json:"background"` // 可选，Base64 编码的背景图
-	References []ReferenceItem `json:"references"` // 可选参考图列表
-	Provider   string          `json:"provider"`   // 模型提供者: google/wan，默认 google
-	Prompt     string          `json:"prompt"`     // 用户自定义提示词
+	Foreground         string          `json:"foreground"`           // 可选，Base64 编码的前景图
+	Background         string          `json:"background"`           // 可选，Base64 编码的背景图
+	References         []ReferenceItem `json:"references"`           // 可选参考图列表
+	Provider           string          `json:"provider"`             // 模型提供者: google/wan，默认 google
+	StylePrompt        string          `json:"style_prompt"`         // 可选，仅用于风格转换的控制提示词
+	LegacyPrompt       string          `json:"prompt"`               // 兼容旧字段，仅作为 style_prompt 别名读取
+	BackgroundPromptID int64           `json:"background_prompt_id"` // 可选，背景图提示词模板 ID
 }
 
 // RewriteResponse 图像改写响应结果
@@ -332,7 +330,7 @@ type RewriteResponse struct {
 
 // Rewrite 图像改写（光影融合）
 // POST /images/rewrite
-// 请求体: {"foreground": "base64...", "background": "base64...", "references": [...], "provider": "google/wan", "prompt": "xxx"}
+// 请求体: {"foreground": "base64...", "background": "base64...", "references": [...], "provider": "google/wan", "background_prompt_id": 1, "style_prompt": "黑白线稿风格"}
 func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	// 限制请求体大小（最大 100MB）
 	r.Body = http.MaxBytesReader(w, r.Body, 100*1024*1024)
@@ -352,8 +350,21 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 		return writeJSONError(w, http.StatusBadRequest, "不支持的模型提供者，仅支持 google 或 wan")
 	}
 
-	logger.Info("图像改写请求: provider=%s, prompt=%s, references=%d",
-		req.Provider, req.Prompt, len(req.References))
+	stylePrompt := req.effectiveStylePrompt()
+	hasBackground := strings.TrimSpace(req.Background) != ""
+
+	if hasBackground && req.BackgroundPromptID <= 0 {
+		return writeJSONError(w, http.StatusBadRequest, "提供背景图时必须同时提供 background_prompt_id")
+	}
+	if !hasBackground && req.BackgroundPromptID > 0 {
+		return writeJSONError(w, http.StatusBadRequest, "未提供背景图时不能传 background_prompt_id")
+	}
+	if hasBackground && stylePrompt != "" {
+		return writeJSONError(w, http.StatusBadRequest, "背景融合场景不支持 style_prompt")
+	}
+
+	logger.Info("图像改写请求: provider=%s, background_prompt_id=%d, has_style_prompt=%t, references=%d",
+		req.Provider, req.BackgroundPromptID, stylePrompt != "", len(req.References))
 
 	inputs, err := h.prepareLLMInputs(ctx, req)
 	if err != nil {
@@ -365,12 +376,16 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	result, err := h.llmService.Compose(ctx, llm.ComposeParams{
-		Provider: req.Provider,
-		Prompt:   req.Prompt,
-		Images:   inputs,
+		Provider:           req.Provider,
+		StylePrompt:        stylePrompt,
+		Images:             inputs,
+		BackgroundPromptID: req.BackgroundPromptID,
 	})
 	if err != nil {
 		logger.Error("调用模型融合失败: %v", err)
+		if errors.Is(err, llm.ErrBackgroundPromptNotFound) {
+			return writeJSONError(w, http.StatusBadRequest, "背景图提示词模板不存在")
+		}
 		return writeJSONError(w, http.StatusInternalServerError, "模型融合失败")
 	}
 
@@ -412,6 +427,13 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 		ImageURL: imageURL,
 		Message:  "图像改写成功",
 	})
+}
+
+func (r RewriteRequest) effectiveStylePrompt() string {
+	if strings.TrimSpace(r.StylePrompt) != "" {
+		return strings.TrimSpace(r.StylePrompt)
+	}
+	return strings.TrimSpace(r.LegacyPrompt)
 }
 
 func (h *ImageHandler) prepareLLMInputs(ctx context.Context, req RewriteRequest) ([]llm.ImageInput, error) {
@@ -556,125 +578,6 @@ func (h *ImageHandler) Delete(ctx context.Context, w http.ResponseWriter, r *htt
 		Success: true,
 		Message: "图像删除成功",
 	})
-}
-
-// mergeImages 合并多张图像（光影融合）
-// foreground 前景图数据
-// background 背景图数据
-// references 参考图列表
-// prompt 用户提示词
-// 返回融合后的图像数据
-func (h *ImageHandler) mergeImages(foreground, background []byte, references map[string][]byte, prompt string) ([]byte, error) {
-	_ = prompt
-	// 如果有前景图和背景图，进行简单的叠加融合
-	if len(foreground) > 0 && len(background) > 0 {
-		return h.blendImages(foreground, background)
-	}
-
-	// 如果只有前景图
-	if len(foreground) > 0 {
-		return foreground, nil
-	}
-
-	// 如果只有背景图
-	if len(background) > 0 {
-		return background, nil
-	}
-
-	// 如果有参考图，使用第一张
-	for _, refData := range references {
-		return refData, nil
-	}
-
-	return nil, fmt.Errorf("没有提供任何图像数据")
-}
-
-// blendImages 简单的图像叠加混合
-// 将前景图叠加到背景图上
-func (h *ImageHandler) blendImages(foreground, background []byte) ([]byte, error) {
-	// 解码前景图
-	fgImg, _, err := image.Decode(bytes.NewReader(foreground))
-	if err != nil {
-		// 尝试作为 raw bytes 处理
-		return foreground, nil
-	}
-
-	// 解码背景图
-	bgImg, _, err := image.Decode(bytes.NewReader(background))
-	if err != nil {
-		// 尝试作为 raw bytes 处理
-		return background, nil
-	}
-
-	// 获取背景图尺寸
-	bounds := bgImg.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-
-	// 创建输出图像
-	output := image.NewRGBA(bounds)
-
-	// 绘制背景图
-	for y := range height {
-		for x := range width {
-			output.Set(x, y, bgImg.At(x, y))
-		}
-	}
-
-	// 获取前景图尺寸
-	fgBounds := fgImg.Bounds()
-	fgWidth := fgBounds.Dx()
-	fgHeight := fgBounds.Dy()
-
-	// 将前景图叠加到背景图中心
-	offsetX := (width - fgWidth) / 2
-	offsetY := (height - fgHeight) / 2
-
-	// Alpha 混合
-	for y := range fgHeight {
-		for x := range fgWidth {
-			fx := x + offsetX
-			fy := y + offsetY
-			if fx >= 0 && fx < width && fy >= 0 && fy < height {
-				fgPixel := fgImg.At(x, y)
-				bgPixel := output.At(fx, fy)
-				blended := alphaBlend(fgPixel, bgPixel, 0.7) // 70% 透明度
-				output.Set(fx, fy, blended)
-			}
-		}
-	}
-
-	// 编码为 PNG
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, output); err != nil {
-		return nil, fmt.Errorf("图像编码失败: %w", err)
-	}
-
-	return buf.Bytes(), nil
-}
-
-// alphaBlend Alpha 混合
-// fg 前景色
-// bg 背景色
-// alpha 前景色透明度
-func alphaBlend(fg, bg color.Color, alpha float64) color.Color {
-	fgR, fgG, fgB, fgA := fg.RGBA()
-	bgR, bgG, bgB, bgA := bg.RGBA()
-
-	// 计算最终 alpha
-	a := alpha*float64(fgA)/float64(0xFFFF) + (1-alpha)*float64(bgA)/float64(0xFFFF)
-
-	// 计算最终颜色
-	r := float64(fgR)*alpha/float64(0xFFFF) + float64(bgR)*(1-alpha)/float64(0xFFFF)
-	g := float64(fgG)*alpha/float64(0xFFFF) + float64(bgG)*(1-alpha)/float64(0xFFFF)
-	b := float64(fgB)*alpha/float64(0xFFFF) + float64(bgB)*(1-alpha)/float64(0xFFFF)
-
-	return color.RGBA64{
-		R: uint16(r * 0xFFFF),
-		G: uint16(g * 0xFFFF),
-		B: uint16(b * 0xFFFF),
-		A: uint16(a * 0xFFFF),
-	}
 }
 
 // convertToWebP 将 PNG 图像转换为 WebP 格式

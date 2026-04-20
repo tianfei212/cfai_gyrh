@@ -17,6 +17,8 @@ func RegisterRoutes(
 	imageHandler *handler.ImageHandler,
 	referenceHandler *handler.ReferenceHandler,
 	skillHandler *handler.SkillHandler,
+	llmPromptTemplateHandler *handler.LLMPromptTemplateHandler,
+	backgroundPromptHandler *handler.BackgroundPromptHandler,
 	authConfig *middleware.AuthConfig,
 ) {
 	router.Use(middleware.CORS())
@@ -46,6 +48,20 @@ func RegisterRoutes(
 	protected.HandleFunc("/skills", skillHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/skills/{id}", skillHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/skills/{id}", skillHandler.Delete).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/llm-prompt-templates", llmPromptTemplateHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/llm-prompt-templates/{id}", llmPromptTemplateHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/llm-prompt-templates", llmPromptTemplateHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/llm-prompt-templates/{id}", llmPromptTemplateHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/llm-prompt-templates/{id}", llmPromptTemplateHandler.Delete).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/background-prompts", backgroundPromptHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/background-prompts/suggest-defaults", backgroundPromptHandler.SuggestDefaults).Methods(http.MethodPost)
+	protected.HandleFunc("/background-prompts/sync-english", backgroundPromptHandler.SyncEnglish).Methods(http.MethodPost)
+	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/background-prompts", backgroundPromptHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Delete).Methods(http.MethodDelete)
 }
 
 func adaptErr(fn func(context.Context, http.ResponseWriter, *http.Request) error) http.Handler {

@@ -39,8 +39,6 @@ type ComposeParams struct {
 	BackgroundImage string
 	// ReferenceImages 参考图映射（按 ImageType 索引）
 	ReferenceImages map[ImageType]string
-	// UserPrompt 用户 Prompt
-	UserPrompt string
 }
 
 // ComposeResult 光影融合结果
@@ -58,14 +56,16 @@ type WanHandler struct {
 	storage storage.StorageService
 	apiKey  string
 	baseURL string
+	model   string
 }
 
 // NewWanHandler 创建 Wan 处理器实例
-func NewWanHandler(storageSvc storage.StorageService) *WanHandler {
+func NewWanHandler(storageSvc storage.StorageService, model string) *WanHandler {
 	return &WanHandler{
 		storage: storageSvc,
 		apiKey:  os.Getenv("WAN_API_KEY"),
 		baseURL: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+		model:   model,
 	}
 }
 
@@ -103,9 +103,9 @@ type Usage struct {
 	ImageCount int `json:"image_count"`
 }
 
-// Compose 执行光影融合
-// Wan 图像上传策略：必须使用 OSS 路径
-func (h *WanHandler) Compose(ctx context.Context, params *ComposeParams, skillContent string) (*ComposeResult, error) {
+// Compose 执行光影融合。
+// prompt 已经是上层整理好的最终文本，Wan 侧不再重复拼装。
+func (h *WanHandler) Compose(ctx context.Context, params *ComposeParams, prompt string) (*ComposeResult, error) {
 	logger.Info("Wan 光影融合开始: character=%s, background=%s",
 		params.CharacterImage, params.BackgroundImage)
 
@@ -115,12 +115,9 @@ func (h *WanHandler) Compose(ctx context.Context, params *ComposeParams, skillCo
 		return nil, fmt.Errorf("组装图像 URL 失败: %w", err)
 	}
 
-	// 构建 Prompt
-	prompt := h.buildPrompt(skillContent, params.UserPrompt)
-
 	// 构建请求
 	wanReq := WanRequest{
-		Model: "wanx-plus",
+		Model: h.model,
 		Input: WanInput{
 			Prompt: prompt,
 		},
@@ -213,25 +210,6 @@ func (h *WanHandler) getOSSURL(ctx context.Context, assetID string) (string, err
 	}
 	logger.Debug("获取 Wan 模型 OSS 路径成功: assetID=%s, url=%s", assetID, uploadURL)
 	return uploadURL, nil
-}
-
-// buildPrompt 构建 Prompt
-func (h *WanHandler) buildPrompt(skillContent string, userPrompt string) string {
-	var prompt bytes.Buffer
-
-	// 添加 Skill 内容
-	if skillContent != "" {
-		prompt.WriteString("[Skill]\n")
-		prompt.WriteString(skillContent)
-		prompt.WriteString("\n[/Skill]\n\n")
-	}
-
-	// 添加用户 Prompt
-	prompt.WriteString("[User]\n")
-	prompt.WriteString(userPrompt)
-	prompt.WriteString("\n[/User]")
-
-	return prompt.String()
 }
 
 // sendRequest 发送请求到 Wan API

@@ -16,6 +16,7 @@ type Config struct {
 	Matting MattingConfig `yaml:"matting"`
 	Storage StorageConfig `yaml:"storage"`
 	Skill   SkillConfig   `yaml:"skill"`
+	Models  ModelConfig   `yaml:"models"`
 	AliOSS  AliOSSConfig  `yaml:"alioss"`
 	Import  ImportConfig  `yaml:"import"`
 	Gallery GalleryConfig `yaml:"gallery"`
@@ -58,6 +59,13 @@ type SkillConfig struct {
 	LocalPath           string `yaml:"local_path"`
 	ImportTriggerFile   string `yaml:"import_trigger_file"`
 	WatchIntervalSecond int    `yaml:"watch_interval_seconds"`
+}
+
+// ModelConfig 大模型名称配置。
+type ModelConfig struct {
+	Gemini string `yaml:"gemini"`
+	Wan    string `yaml:"wan"`
+	Qwen   string `yaml:"qwen"`
 }
 
 // AliOSSConfig aliOSS 二进制服务配置。
@@ -116,10 +124,15 @@ func DefaultConfig() *Config {
 			ImportTriggerFile:   "./configs/SKILL导入",
 			WatchIntervalSecond: 5,
 		},
+		Models: ModelConfig{
+			Gemini: "gemini-1.5-flash",
+			Wan:    "wanx-plus",
+			Qwen:   "qwen3.6-plus",
+		},
 		AliOSS: AliOSSConfig{
 			Enabled:           true,
 			AutoStart:         true,
-			BinaryPath:        "./bin/alOSS_agent_go",
+			BinaryPath:        "./bin/oss-cli",
 			Port:              18080,
 			HealthWaitSeconds: 15,
 		},
@@ -269,7 +282,7 @@ func applyEnvOverrides(cfg *Config) error {
 	if v := firstEnv("GYRH_STORAGE_OSS_SECRET_KEY", "OSS_ACCESS_KEY_SECRET"); v != "" {
 		cfg.Storage.OssSecretKey = v
 	}
-	if v := os.Getenv("GYRH_STORAGE_DASHSCOPE_API_KEY"); v != "" {
+	if v := firstEnv("GYRH_STORAGE_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY"); v != "" {
 		cfg.Storage.DashScopeAPIKey = v
 	}
 
@@ -288,6 +301,16 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("GYRH_SKILL_WATCH_INTERVAL_SECONDS 无效: %s", v)
 		}
 		cfg.Skill.WatchIntervalSecond = value
+	}
+
+	if v := os.Getenv("GYRH_MODEL_GEMINI"); v != "" {
+		cfg.Models.Gemini = v
+	}
+	if v := os.Getenv("GYRH_MODEL_WAN"); v != "" {
+		cfg.Models.Wan = v
+	}
+	if v := os.Getenv("GYRH_MODEL_QWEN"); v != "" {
+		cfg.Models.Qwen = v
 	}
 
 	if v := os.Getenv("GYRH_ALIOSS_ENABLED"); v != "" {
@@ -358,8 +381,7 @@ func loadDotEnv(path string) error {
 		return err
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -404,6 +426,15 @@ func validateConfig(cfg *Config) error {
 	}
 	if cfg.Skill.LocalPath == "" {
 		return fmt.Errorf("skill.local_path 不能为空")
+	}
+	if strings.TrimSpace(cfg.Models.Gemini) == "" {
+		return fmt.Errorf("models.gemini 不能为空")
+	}
+	if strings.TrimSpace(cfg.Models.Wan) == "" {
+		return fmt.Errorf("models.wan 不能为空")
+	}
+	if strings.TrimSpace(cfg.Models.Qwen) == "" {
+		return fmt.Errorf("models.qwen 不能为空")
 	}
 	if cfg.AliOSS.Port <= 0 || cfg.AliOSS.Port > 65535 {
 		return fmt.Errorf("alioss.port 无效: %d", cfg.AliOSS.Port)
