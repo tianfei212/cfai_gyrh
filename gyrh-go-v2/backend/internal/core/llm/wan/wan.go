@@ -57,15 +57,17 @@ type WanHandler struct {
 	apiKey  string
 	baseURL string
 	model   string
+	timeout time.Duration
 }
 
 // NewWanHandler 创建 Wan 处理器实例
-func NewWanHandler(storageSvc storage.StorageService, model string) *WanHandler {
+func NewWanHandler(storageSvc storage.StorageService, model string, timeout time.Duration) *WanHandler {
 	return &WanHandler{
 		storage: storageSvc,
 		apiKey:  os.Getenv("WAN_API_KEY"),
 		baseURL: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
 		model:   model,
+		timeout: timeout,
 	}
 }
 
@@ -230,7 +232,7 @@ func (h *WanHandler) sendRequest(ctx context.Context, req WanRequest) (*WanRespo
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+h.apiKey)
 
-	client := &http.Client{Timeout: 180 * time.Second}
+	client := &http.Client{Timeout: h.timeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("发送请求失败: %w", err)

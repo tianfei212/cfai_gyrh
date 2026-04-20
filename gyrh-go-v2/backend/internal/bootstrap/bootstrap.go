@@ -171,7 +171,7 @@ func (s *Service) importGeneratedImages(ctx context.Context) error {
 			continue
 		}
 
-		assetID, err := s.storageService.Save(ctx, data, entry.Name())
+		assetID, err := s.storageService.SaveWithKind(ctx, data, entry.Name(), storage.SaveKindGenerated)
 		if err != nil {
 			logger.Error("保存导入图片失败: %v", err)
 			continue

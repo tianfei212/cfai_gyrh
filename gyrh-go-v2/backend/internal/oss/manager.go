@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -16,13 +17,14 @@ import (
 
 // Manager 负责管理 aliOSS 二进制服务的生命周期。
 type Manager struct {
-	cfg *config.AliOSSConfig
-	cmd *exec.Cmd
+	cfg        *config.AliOSSConfig
+	configPath string
+	cmd        *exec.Cmd
 }
 
 // NewManager 创建 aliOSS 管理器。
-func NewManager(cfg *config.AliOSSConfig) *Manager {
-	return &Manager{cfg: cfg}
+func NewManager(cfg *config.AliOSSConfig, configPath string) *Manager {
+	return &Manager{cfg: cfg, configPath: configPath}
 }
 
 // Endpoint 返回 aliOSS 本地服务地址。
@@ -46,7 +48,7 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	projectRoot := filepath.Dir(filepath.Dir(binaryPath))
 	args := []string{"server", "-p", strconv.Itoa(m.cfg.Port)}
-	if configPath := resolveAgentConfigPath(projectRoot); configPath != "" {
+	if configPath := m.resolveAgentConfigPath(projectRoot); configPath != "" {
 		args = append(args, "--config", configPath)
 	}
 
@@ -72,7 +74,12 @@ func (m *Manager) Start(ctx context.Context) error {
 	return fmt.Errorf("等待 aliOSS 服务就绪超时")
 }
 
-func resolveAgentConfigPath(projectRoot string) string {
+func (m *Manager) resolveAgentConfigPath(projectRoot string) string {
+	if m != nil && m.configPath != "" {
+		if info, err := os.Stat(m.configPath); err == nil && !info.IsDir() {
+			return m.configPath
+		}
+	}
 	candidates := []string{
 		filepath.Join(projectRoot, "configs", "alioss-agent.yaml"),
 		filepath.Join(projectRoot, "config.yaml"),
@@ -86,8 +93,13 @@ func resolveAgentConfigPath(projectRoot string) string {
 }
 
 func resolveBinaryPath(configured string) (string, error) {
+	baseDir := filepath.Dir(configured)
+	platformBinary := platformBinaryName()
 	candidates := []string{
 		configured,
+		filepath.Join(baseDir, platformBinary),
+		filepath.Join(baseDir, "oss-cli-darwin-arm64"),
+		filepath.Join(baseDir, "oss-cli-linux-amd64"),
 		filepath.Join(filepath.Dir(configured), "alOSS_agent_go"),
 		filepath.Join(filepath.Dir(configured), "oss-cli"),
 		filepath.Join(filepath.Dir(configured), "alioss"),
@@ -103,6 +115,20 @@ func resolveBinaryPath(configured string) (string, error) {
 	}
 
 	return "", fmt.Errorf("未找到 aliOSS 二进制，请先从 github.com/tianfei212/alOSS_agent_go 下载并配置到 %s", configured)
+}
+
+func platformBinaryName() string {
+	switch runtime.GOOS {
+	case "darwin":
+		if runtime.GOARCH == "arm64" {
+			return "oss-cli-darwin-arm64"
+		}
+	case "linux":
+		if runtime.GOARCH == "amd64" {
+			return "oss-cli-linux-amd64"
+		}
+	}
+	return "oss-cli"
 }
 
 // Stop 优雅停止 aliOSS 服务。

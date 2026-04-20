@@ -396,7 +396,7 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	filename := fmt.Sprintf("rewrite_%d.png", time.Now().Unix())
-	assetID, err := h.storageService.Save(ctx, resultData, filename)
+	assetID, err := h.storageService.SaveWithKind(ctx, resultData, filename, storage.SaveKindGenerated)
 	if err != nil {
 		logger.Error("保存改写图像失败: %v", err)
 		return writeJSONError(w, http.StatusInternalServerError, "保存改写图像失败")

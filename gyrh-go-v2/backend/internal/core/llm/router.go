@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gyrh-go-v2/backend/internal/config"
 	"gyrh-go-v2/backend/internal/core/llm/gemini"
@@ -66,12 +67,14 @@ type service struct {
 
 // NewService 创建大模型服务。
 func NewService(cfg *config.Config, storageService storage.StorageService, skillRepo *db.SkillRepo, backgroundPromptRepo *db.BackgroundPromptRepo) (Service, error) {
+	requestTimeout := time.Duration(cfg.Models.HTTPTimeoutMinutes) * time.Minute
+
 	svc := &service{
 		cfg:                  cfg,
 		skillRepo:            skillRepo,
 		backgroundPromptRepo: backgroundPromptRepo,
-		geminiHandler:        gemini.NewGeminiHandler(storageService, cfg.Models.Gemini),
-		wanHandler:           wan.NewWanHandler(storageService, cfg.Models.Wan),
+		geminiHandler:        gemini.NewGeminiHandler(storageService, cfg.Models.Gemini, requestTimeout),
+		wanHandler:           wan.NewWanHandler(storageService, cfg.Models.Wan, requestTimeout),
 	}
 	logger.Info("LLM 服务初始化完成")
 	return svc, nil

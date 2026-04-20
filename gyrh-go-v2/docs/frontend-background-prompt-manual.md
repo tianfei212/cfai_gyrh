@@ -715,6 +715,7 @@ models:
   gemini: gemini-1.5-flash
   wan: wanx-plus
   qwen: qwen3.6-plus
+  http_timeout_minutes: 20
 ```
 
 说明：
@@ -722,7 +723,9 @@ models:
 - `models.gemini` 控制 Gemini 图像生成模型名称
 - `models.wan` 控制 Wan 图像生成模型名称
 - `models.qwen` 控制 Qwen 视觉理解/英文同步模型名称
+- `models.http_timeout_minutes` 控制模型生成类 HTTP 请求超时时间，最大支持 `20` 分钟
 - 也可以用环境变量覆盖：
   - `GYRH_MODEL_GEMINI`
   - `GYRH_MODEL_WAN`
   - `GYRH_MODEL_QWEN`
+  - `GYRH_MODEL_HTTP_TIMEOUT_MINUTES`

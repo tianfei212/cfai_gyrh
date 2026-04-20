@@ -30,6 +30,7 @@ type advisor struct {
 	apiKey     string
 	model      string
 	baseURL    string
+	timeout    time.Duration
 }
 
 // SuggestionResult 表示背景图提示词建议结果。
@@ -80,7 +81,7 @@ type chatCompletionResponse struct {
 }
 
 // NewAdvisor 创建 Qwen 建议服务。
-func NewAdvisor(storageService storage.StorageService, promptRepo *db.LLMPromptTemplateRepo, model string, apiKey string) Advisor {
+func NewAdvisor(storageService storage.StorageService, promptRepo *db.LLMPromptTemplateRepo, model string, apiKey string, timeout time.Duration) Advisor {
 	if apiKey == "" {
 		apiKey = os.Getenv("DASHSCOPE_API_KEY")
 	}
@@ -90,6 +91,7 @@ func NewAdvisor(storageService storage.StorageService, promptRepo *db.LLMPromptT
 		apiKey:     apiKey,
 		model:      model,
 		baseURL:    defaultBaseURL,
+		timeout:    timeout,
 	}
 }
 
@@ -206,7 +208,7 @@ func (a *advisor) chat(ctx context.Context, messages []chatMessage) (string, err
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: a.timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("Qwen 请求失败: %w", err)

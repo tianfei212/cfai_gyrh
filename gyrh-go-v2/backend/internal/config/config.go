@@ -44,12 +44,6 @@ type StorageConfig struct {
 
 	LocalPath string `yaml:"local_path"`
 
-	OssEndpoint     string `yaml:"oss_endpoint"`
-	OssBucket       string `yaml:"oss_bucket"`
-	OssBucketPrefix string `yaml:"oss_bucket_prefix"`
-	OssAccessKey    string `yaml:"oss_access_key"`
-	OssSecretKey    string `yaml:"oss_secret_key"`
-
 	DashScopeAPIKey string `yaml:"dashscope_api_key"`
 }
 
@@ -63,19 +57,25 @@ type SkillConfig struct {
 
 // ModelConfig 大模型名称配置。
 type ModelConfig struct {
-	Gemini string `yaml:"gemini"`
-	Wan    string `yaml:"wan"`
-	Qwen   string `yaml:"qwen"`
+	Gemini             string `yaml:"gemini"`
+	Wan                string `yaml:"wan"`
+	Qwen               string `yaml:"qwen"`
+	HTTPTimeoutMinutes int    `yaml:"http_timeout_minutes"`
 }
 
 // AliOSSConfig aliOSS 二进制服务配置。
 type AliOSSConfig struct {
-	Enabled           bool   `yaml:"enabled"`
-	AutoStart         bool   `yaml:"auto_start"`
-	BinaryPath        string `yaml:"binary_path"`
-	Port              int    `yaml:"port"`
-	OpenAIAPIKey      string `yaml:"openai_api_key"`
-	HealthWaitSeconds int    `yaml:"health_wait_seconds"`
+	Enabled                bool   `yaml:"enabled"`
+	AutoStart              bool   `yaml:"auto_start"`
+	BinaryPath             string `yaml:"binary_path"`
+	Port                   int    `yaml:"port"`
+	GeneratedPort          int    `yaml:"generated_port"`
+	Endpoint               string `yaml:"endpoint"`
+	BucketName             string `yaml:"bucket_name"`
+	BackgroundBucketPrefix string `yaml:"background_bucket_prefix"`
+	GeneratedBucketPrefix  string `yaml:"generated_bucket_prefix"`
+	OpenAIAPIKey           string `yaml:"openai_api_key"`
+	HealthWaitSeconds      int    `yaml:"health_wait_seconds"`
 }
 
 // ImportConfig 导入相关配置。
@@ -114,8 +114,6 @@ func DefaultConfig() *Config {
 		Storage: StorageConfig{
 			Mode:            "local",
 			LocalPath:       "./backend/data/generated",
-			OssEndpoint:     "http://127.0.0.1:18080",
-			OssBucketPrefix: "images_data/",
 			DashScopeAPIKey: "",
 		},
 		Skill: SkillConfig{
@@ -125,16 +123,20 @@ func DefaultConfig() *Config {
 			WatchIntervalSecond: 5,
 		},
 		Models: ModelConfig{
-			Gemini: "gemini-1.5-flash",
-			Wan:    "wanx-plus",
-			Qwen:   "qwen3.6-plus",
+			Gemini:             "gemini-1.5-flash",
+			Wan:                "wanx-plus",
+			Qwen:               "qwen3.6-plus",
+			HTTPTimeoutMinutes: 20,
 		},
 		AliOSS: AliOSSConfig{
-			Enabled:           true,
-			AutoStart:         true,
-			BinaryPath:        "./bin/oss-cli",
-			Port:              18080,
-			HealthWaitSeconds: 15,
+			Enabled:                true,
+			AutoStart:              true,
+			BinaryPath:             "./bin/oss-cli",
+			Port:                   18080,
+			GeneratedPort:          18081,
+			BackgroundBucketPrefix: "images_data/",
+			GeneratedBucketPrefix:  "gyrh_images_data/",
+			HealthWaitSeconds:      15,
 		},
 		Import: ImportConfig{
 			Enabled:             true,
@@ -170,6 +172,9 @@ func Load(configPath string) (*Config, error) {
 
 	if err := loadYAML(yamlPath, cfg); err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("加载配置文件失败: %w", err)
+	}
+	if err := loadAliOSSAgentConfig(filepath.Join(rootDir, "configs", "alioss-agent.yaml"), cfg); err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("加载 aliOSS 配置失败: %w", err)
 	}
 
 	if err := applyEnvOverrides(cfg); err != nil {
@@ -267,21 +272,6 @@ func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("GYRH_STORAGE_LOCAL_PATH"); v != "" {
 		cfg.Storage.LocalPath = v
 	}
-	if v := firstEnv("GYRH_STORAGE_OSS_ENDPOINT", "OSS_ENDPOINT"); v != "" {
-		cfg.Storage.OssEndpoint = v
-	}
-	if v := firstEnv("GYRH_STORAGE_OSS_BUCKET", "OSS_BUCKET"); v != "" {
-		cfg.Storage.OssBucket = v
-	}
-	if v := firstEnv("GYRH_STORAGE_OSS_BUCKET_PREFIX", "OSS_BUCKET_PREFIX"); v != "" {
-		cfg.Storage.OssBucketPrefix = v
-	}
-	if v := firstEnv("GYRH_STORAGE_OSS_ACCESS_KEY", "OSS_ACCESS_KEY_ID"); v != "" {
-		cfg.Storage.OssAccessKey = v
-	}
-	if v := firstEnv("GYRH_STORAGE_OSS_SECRET_KEY", "OSS_ACCESS_KEY_SECRET"); v != "" {
-		cfg.Storage.OssSecretKey = v
-	}
 	if v := firstEnv("GYRH_STORAGE_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY"); v != "" {
 		cfg.Storage.DashScopeAPIKey = v
 	}
@@ -312,6 +302,13 @@ func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("GYRH_MODEL_QWEN"); v != "" {
 		cfg.Models.Qwen = v
 	}
+	if v := os.Getenv("GYRH_MODEL_HTTP_TIMEOUT_MINUTES"); v != "" {
+		value, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("GYRH_MODEL_HTTP_TIMEOUT_MINUTES 无效: %s", v)
+		}
+		cfg.Models.HTTPTimeoutMinutes = value
+	}
 
 	if v := os.Getenv("GYRH_ALIOSS_ENABLED"); v != "" {
 		cfg.AliOSS.Enabled = isTrue(v)
@@ -328,6 +325,25 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("GYRH_ALIOSS_PORT 无效: %s", v)
 		}
 		cfg.AliOSS.Port = value
+	}
+	if v := os.Getenv("GYRH_ALIOSS_GENERATED_PORT"); v != "" {
+		value, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("GYRH_ALIOSS_GENERATED_PORT 无效: %s", v)
+		}
+		cfg.AliOSS.GeneratedPort = value
+	}
+	if v := firstEnv("GYRH_ALIOSS_ENDPOINT", "OSS_ENDPOINT"); v != "" {
+		cfg.AliOSS.Endpoint = v
+	}
+	if v := firstEnv("GYRH_ALIOSS_BUCKET", "OSS_BUCKET"); v != "" {
+		cfg.AliOSS.BucketName = v
+	}
+	if v := os.Getenv("GYRH_ALIOSS_BACKGROUND_BUCKET_PREFIX"); v != "" {
+		cfg.AliOSS.BackgroundBucketPrefix = v
+	}
+	if v := os.Getenv("GYRH_ALIOSS_GENERATED_BUCKET_PREFIX"); v != "" {
+		cfg.AliOSS.GeneratedBucketPrefix = v
 	}
 	if v := firstEnv("GYRH_ALIOSS_OPENAI_API_KEY", "OPENAI_API_KEY"); v != "" {
 		cfg.AliOSS.OpenAIAPIKey = v
@@ -436,8 +452,34 @@ func validateConfig(cfg *Config) error {
 	if strings.TrimSpace(cfg.Models.Qwen) == "" {
 		return fmt.Errorf("models.qwen 不能为空")
 	}
+	if cfg.Models.HTTPTimeoutMinutes <= 0 {
+		return fmt.Errorf("models.http_timeout_minutes 必须大于 0")
+	}
+	if cfg.Models.HTTPTimeoutMinutes > 20 {
+		return fmt.Errorf("models.http_timeout_minutes 不能超过 20 分钟")
+	}
 	if cfg.AliOSS.Port <= 0 || cfg.AliOSS.Port > 65535 {
 		return fmt.Errorf("alioss.port 无效: %d", cfg.AliOSS.Port)
+	}
+	if cfg.AliOSS.GeneratedPort <= 0 || cfg.AliOSS.GeneratedPort > 65535 {
+		return fmt.Errorf("alioss.generated_port 无效: %d", cfg.AliOSS.GeneratedPort)
+	}
+	if cfg.AliOSS.GeneratedPort == cfg.AliOSS.Port {
+		return fmt.Errorf("alioss.generated_port 不能与 alioss.port 相同")
+	}
+	if cfg.AliOSS.Enabled {
+		if strings.TrimSpace(cfg.AliOSS.Endpoint) == "" {
+			return fmt.Errorf("alioss.endpoint 不能为空")
+		}
+		if strings.TrimSpace(cfg.AliOSS.BucketName) == "" {
+			return fmt.Errorf("alioss.bucket_name 不能为空")
+		}
+		if strings.TrimSpace(cfg.AliOSS.BackgroundBucketPrefix) == "" {
+			return fmt.Errorf("alioss.background_bucket_prefix 不能为空")
+		}
+		if strings.TrimSpace(cfg.AliOSS.GeneratedBucketPrefix) == "" {
+			return fmt.Errorf("alioss.generated_bucket_prefix 不能为空")
+		}
 	}
 	validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}
 	if !validLevels[cfg.Logger.Level] {
@@ -463,10 +505,60 @@ func resolveConfigPaths(cfg *Config, rootDir string) {
 	cfg.AliOSS.BinaryPath = resolvePath(rootDir, cfg.AliOSS.BinaryPath)
 	cfg.Import.GeneratedDir = resolvePath(rootDir, cfg.Import.GeneratedDir)
 	cfg.Logger.Path = resolvePath(rootDir, cfg.Logger.Path)
+}
 
-	if cfg.Storage.Mode == "oss" && cfg.Storage.OssEndpoint == "" && cfg.AliOSS.Port > 0 {
-		cfg.Storage.OssEndpoint = fmt.Sprintf("http://127.0.0.1:%d", cfg.AliOSS.Port)
+type aliOSSAgentFile struct {
+	OSS struct {
+		Endpoint              string `yaml:"endpoint"`
+		BucketName            string `yaml:"bucket_name"`
+		BucketPrefix          string `yaml:"bucket_prefix"`
+		GeneratedBucketPrefix string `yaml:"generated_bucket_prefix"`
+	} `yaml:"oss"`
+	Server struct {
+		Port         int    `yaml:"port"`
+		OpenAIAPIKey string `yaml:"openai_api_key"`
+	} `yaml:"server"`
+}
+
+func loadAliOSSAgentConfig(path string, cfg *Config) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
 	}
+
+	var agent aliOSSAgentFile
+	if err := yaml.Unmarshal(data, &agent); err != nil {
+		return fmt.Errorf("解析 aliOSS agent YAML 失败: %w", err)
+	}
+
+	if agent.OSS.Endpoint != "" {
+		cfg.AliOSS.Endpoint = agent.OSS.Endpoint
+	}
+	if agent.OSS.BucketName != "" {
+		cfg.AliOSS.BucketName = agent.OSS.BucketName
+	}
+	if agent.OSS.BucketPrefix != "" {
+		cfg.AliOSS.BackgroundBucketPrefix = agent.OSS.BucketPrefix
+	}
+	if agent.OSS.GeneratedBucketPrefix != "" {
+		cfg.AliOSS.GeneratedBucketPrefix = agent.OSS.GeneratedBucketPrefix
+	}
+	if agent.Server.Port > 0 {
+		cfg.AliOSS.Port = agent.Server.Port
+		if cfg.AliOSS.GeneratedPort <= 0 {
+			cfg.AliOSS.GeneratedPort = agent.Server.Port + 1
+		}
+	}
+	if agent.Server.OpenAIAPIKey != "" {
+		cfg.AliOSS.OpenAIAPIKey = agent.Server.OpenAIAPIKey
+	}
+	if cfg.AliOSS.GeneratedBucketPrefix == "" {
+		cfg.AliOSS.GeneratedBucketPrefix = "gyrh_images_data/"
+	}
+	if cfg.AliOSS.GeneratedPort <= 0 && cfg.AliOSS.Port > 0 {
+		cfg.AliOSS.GeneratedPort = cfg.AliOSS.Port + 1
+	}
+	return nil
 }
 
 func resolvePath(rootDir, path string) string {

@@ -40,7 +40,8 @@ func main() {
 	})
 	defer logger.Close()
 
-	if prepareErr := prepareAliOSSRuntimeFiles(cfg); prepareErr != nil {
+	backgroundAgentConfigPath, generatedAgentConfigPath, prepareErr := prepareAliOSSRuntimeFiles(cfg)
+	if prepareErr != nil {
 		logger.Fatal("准备 aliOSS 运行配置失败: %v", prepareErr)
 	}
 
@@ -50,8 +51,17 @@ func main() {
 	}
 	defer database.Close()
 
-	aliOSSManager := oss.NewManager(&cfg.AliOSS)
+	backgroundOSSConfig := cfg.AliOSS
+	backgroundOSSConfig.Port = cfg.AliOSS.Port
+	aliOSSManager := oss.NewManager(&backgroundOSSConfig, backgroundAgentConfigPath)
 	if startErr := aliOSSManager.Start(context.Background()); startErr != nil {
+		logger.Fatal("启动 aliOSS 素材服务失败: %v", startErr)
+	}
+
+	generatedOSSConfig := cfg.AliOSS
+	generatedOSSConfig.Port = cfg.AliOSS.GeneratedPort
+	generatedOSSManager := oss.NewManager(&generatedOSSConfig, generatedAgentConfigPath)
+	if startErr := generatedOSSManager.Start(context.Background()); startErr != nil {
 		logger.Fatal("启动 aliOSS 服务失败: %v", startErr)
 	}
 
@@ -74,7 +84,8 @@ func main() {
 	if err != nil {
 		logger.Fatal("初始化 LLM 服务失败: %v", err)
 	}
-	qwenAdvisor := qwen.NewAdvisor(storageService, llmPromptTemplateRepo, cfg.Models.Qwen, cfg.Storage.DashScopeAPIKey)
+	requestTimeout := time.Duration(cfg.Models.HTTPTimeoutMinutes) * time.Minute
+	qwenAdvisor := qwen.NewAdvisor(storageService, llmPromptTemplateRepo, cfg.Models.Qwen, cfg.Storage.DashScopeAPIKey, requestTimeout)
 
 	bootstrapService := bootstrap.New(cfg, skillRepo, imageRepo, storageService)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -115,10 +126,10 @@ func main() {
 		}
 	}()
 
-	waitForShutdown(ctx, cancel, server, aliOSSManager)
+	waitForShutdown(ctx, cancel, server, aliOSSManager, generatedOSSManager)
 }
 
-func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *http.Server, aliOSSManager *oss.Manager) {
+func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *http.Server, managers ...*oss.Manager) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
@@ -131,8 +142,13 @@ func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *htt
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Error("关闭 HTTP 服务失败: %v", err)
 	}
-	if err := aliOSSManager.Stop(shutdownCtx); err != nil {
-		logger.Error("关闭 aliOSS 服务失败: %v", err)
+	for _, manager := range managers {
+		if manager == nil {
+			continue
+		}
+		if err := manager.Stop(shutdownCtx); err != nil {
+			logger.Error("关闭 aliOSS 服务失败: %v", err)
+		}
 	}
 
 	logger.Info("服务已优雅关闭")
@@ -151,40 +167,47 @@ func parseLogLevel(value string) logger.Level {
 	}
 }
 
-func prepareAliOSSRuntimeFiles(cfg *config.Config) error {
+func prepareAliOSSRuntimeFiles(cfg *config.Config) (string, string, error) {
 	rootDir, err := config.FindProjectRoot()
 	if err != nil {
-		return err
+		return "", "", err
 	}
 
-	configPath := filepath.Join(rootDir, "configs", "alioss-agent.yaml")
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return err
-	}
-
-	if cfg.Storage.OssEndpoint != "" {
-		_ = os.Setenv("OSS_ENDPOINT", cfg.Storage.OssEndpoint)
-	}
-	if cfg.Storage.OssBucket != "" {
-		_ = os.Setenv("OSS_BUCKET", cfg.Storage.OssBucket)
-	}
-	if cfg.Storage.OssBucketPrefix != "" {
-		_ = os.Setenv("OSS_BUCKET_PREFIX", cfg.Storage.OssBucketPrefix)
-	}
-	if cfg.AliOSS.OpenAIAPIKey != "" {
-		_ = os.Setenv("OPENAI_API_KEY", cfg.AliOSS.OpenAIAPIKey)
+	backgroundConfigPath := filepath.Join(rootDir, "configs", "alioss-agent.yaml")
+	generatedConfigPath := filepath.Join(rootDir, "configs", "alioss-agent-generated.yaml")
+	if err := os.MkdirAll(filepath.Dir(backgroundConfigPath), 0755); err != nil {
+		return "", "", err
 	}
 
 	content := fmt.Sprintf(`oss:
   endpoint: %q
   bucket_name: %q
   bucket_prefix: %q
+  generated_bucket_prefix: %q
 
 server:
   port: %d
   link_expire_seconds: 3600
-  openai_api_key: ""
-`, cfg.Storage.OssEndpoint, cfg.Storage.OssBucket, cfg.Storage.OssBucketPrefix, cfg.AliOSS.Port)
+  openai_api_key: %q
+`, cfg.AliOSS.Endpoint, cfg.AliOSS.BucketName, cfg.AliOSS.BackgroundBucketPrefix, cfg.AliOSS.GeneratedBucketPrefix, cfg.AliOSS.Port, cfg.AliOSS.OpenAIAPIKey)
 
-	return os.WriteFile(configPath, []byte(content), 0644)
+	generatedContent := fmt.Sprintf(`oss:
+  endpoint: %q
+  bucket_name: %q
+  bucket_prefix: %q
+  generated_bucket_prefix: %q
+
+server:
+  port: %d
+  link_expire_seconds: 3600
+  openai_api_key: %q
+`, cfg.AliOSS.Endpoint, cfg.AliOSS.BucketName, cfg.AliOSS.GeneratedBucketPrefix, cfg.AliOSS.GeneratedBucketPrefix, cfg.AliOSS.GeneratedPort, cfg.AliOSS.OpenAIAPIKey)
+
+	if err := os.WriteFile(backgroundConfigPath, []byte(content), 0644); err != nil {
+		return "", "", err
+	}
+	if err := os.WriteFile(generatedConfigPath, []byte(generatedContent), 0644); err != nil {
+		return "", "", err
+	}
+	return backgroundConfigPath, generatedConfigPath, nil
 }

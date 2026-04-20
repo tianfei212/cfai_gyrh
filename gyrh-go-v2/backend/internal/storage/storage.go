@@ -22,10 +22,23 @@ const (
 	ProviderQwen StorageProvider = "qwen"
 )
 
+// SaveKind 表示存储分区类型。
+type SaveKind string
+
+const (
+	// SaveKindAsset 背景图、参考图、前景图等素材类资源。
+	SaveKindAsset SaveKind = "asset"
+	// SaveKindGenerated 生成结果类资源。
+	SaveKindGenerated SaveKind = "generated"
+)
+
 // StorageService 存储服务接口
 type StorageService interface {
 	// Save 保存图像数据，返回 assetID
 	Save(ctx context.Context, data []byte, filename string) (string, error)
+
+	// SaveWithKind 按资源类型保存图像数据，便于 OSS 路径分流。
+	SaveWithKind(ctx context.Context, data []byte, filename string, kind SaveKind) (string, error)
 
 	// Read 读取已存储的图像原始字节。
 	Read(ctx context.Context, assetID string) ([]byte, error)
@@ -46,6 +59,7 @@ type service struct {
 	mode      string
 	local     *LocalStorage
 	alioss    ossclient.OSSClient
+	generated ossclient.OSSClient
 	dashscope *ossclient.DashScopeClient
 }
 
@@ -63,47 +77,66 @@ func NewStorageService(cfg *config.Config) (StorageService, error) {
 			fmt.Sprintf("http://127.0.0.1:%d", cfg.AliOSS.Port),
 			cfg.AliOSS.OpenAIAPIKey,
 		)
+		svc.generated = ossclient.NewAlOSSClient(
+			fmt.Sprintf("http://127.0.0.1:%d", cfg.AliOSS.GeneratedPort),
+			cfg.AliOSS.OpenAIAPIKey,
+		)
 	}
 
 	return svc, nil
 }
 
 func (s *service) Save(ctx context.Context, data []byte, filename string) (string, error) {
+	return s.SaveWithKind(ctx, data, filename, SaveKindAsset)
+}
+
+func (s *service) SaveWithKind(ctx context.Context, data []byte, filename string, kind SaveKind) (string, error) {
 	if s.mode == "oss" {
-		if s.alioss == nil {
-			return "", fmt.Errorf("aliOSS 客户端未初始化")
+		client, err := s.clientForKind(kind)
+		if err != nil {
+			return "", err
 		}
-		return s.alioss.Upload(ctx, data, filename)
+		rawID, err := client.Upload(ctx, data, filename)
+		if err != nil {
+			return "", err
+		}
+		return encodeAssetID(kind, rawID), nil
 	}
 	return s.local.Save(ctx, data, filename)
 }
 
 func (s *service) Read(ctx context.Context, assetID string) ([]byte, error) {
 	if s.mode == "oss" {
-		if s.alioss == nil {
-			return nil, fmt.Errorf("aliOSS 客户端未初始化")
+		kind, rawID := decodeAssetID(assetID)
+		client, err := s.clientForKind(kind)
+		if err != nil {
+			return nil, err
 		}
-		return s.alioss.Download(ctx, assetID)
+		return client.Download(ctx, rawID)
 	}
 	return s.local.LoadFile(assetID)
 }
 
 func (s *service) GetImageURL(ctx context.Context, assetID string) (string, error) {
 	if s.mode == "oss" {
-		if s.alioss == nil {
-			return "", fmt.Errorf("aliOSS 客户端未初始化")
+		kind, rawID := decodeAssetID(assetID)
+		client, err := s.clientForKind(kind)
+		if err != nil {
+			return "", err
 		}
-		return s.alioss.GetSignedURL(ctx, assetID, 3600)
+		return client.GetSignedURL(ctx, rawID, 3600)
 	}
 	return s.local.GetImageURL(ctx, assetID)
 }
 
 func (s *service) GetForModelUpload(ctx context.Context, assetID string, provider StorageProvider) (string, error) {
 	if s.mode == "oss" {
-		if s.alioss == nil {
+		kind, rawID := decodeAssetID(assetID)
+		client, err := s.clientForKind(kind)
+		if err != nil {
 			return "", fmt.Errorf("aliOSS 客户端未初始化")
 		}
-		return s.alioss.GetSignedURL(ctx, assetID, 1800)
+		return client.GetSignedURL(ctx, rawID, 1800)
 	}
 
 	data, err := s.local.LoadFile(assetID)
@@ -129,12 +162,47 @@ func (s *service) GetForModelUpload(ctx context.Context, assetID string, provide
 
 func (s *service) Delete(ctx context.Context, assetID string) error {
 	if s.mode == "oss" {
-		if s.alioss == nil {
-			return fmt.Errorf("aliOSS 客户端未初始化")
+		kind, rawID := decodeAssetID(assetID)
+		client, err := s.clientForKind(kind)
+		if err != nil {
+			return err
 		}
-		return s.alioss.Delete(ctx, assetID)
+		return client.Delete(ctx, rawID)
 	}
 	return s.local.Delete(ctx, assetID)
+}
+
+func (s *service) clientForKind(kind SaveKind) (ossclient.OSSClient, error) {
+	switch kind {
+	case SaveKindGenerated:
+		if s.generated == nil {
+			return nil, fmt.Errorf("生成图 aliOSS 客户端未初始化")
+		}
+		return s.generated, nil
+	default:
+		if s.alioss == nil {
+			return nil, fmt.Errorf("素材 aliOSS 客户端未初始化")
+		}
+		return s.alioss, nil
+	}
+}
+
+func encodeAssetID(kind SaveKind, rawID string) string {
+	if rawID == "" {
+		return rawID
+	}
+	return string(kind) + ":" + rawID
+}
+
+func decodeAssetID(assetID string) (SaveKind, string) {
+	switch {
+	case len(assetID) > len("generated:") && assetID[:len("generated:")] == "generated:":
+		return SaveKindGenerated, assetID[len("generated:"):]
+	case len(assetID) > len("asset:") && assetID[:len("asset:")] == "asset:":
+		return SaveKindAsset, assetID[len("asset:"):]
+	default:
+		return SaveKindAsset, assetID
+	}
 }
 
 // GetImagePath 获取本地文件路径。

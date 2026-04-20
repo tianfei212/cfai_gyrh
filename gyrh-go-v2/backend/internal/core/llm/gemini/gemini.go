@@ -59,15 +59,17 @@ type GeminiHandler struct {
 	apiKey   string
 	endpoint string
 	model    string
+	timeout  time.Duration
 }
 
 // NewGeminiHandler 创建 Gemini 处理器实例
-func NewGeminiHandler(storageSvc storage.StorageService, model string) *GeminiHandler {
+func NewGeminiHandler(storageSvc storage.StorageService, model string, timeout time.Duration) *GeminiHandler {
 	return &GeminiHandler{
 		storage:  storageSvc,
 		apiKey:   os.Getenv("GEMINI_API_KEY"),
 		endpoint: "https://generativelanguage.googleapis.com/v1beta/models",
 		model:    model,
+		timeout:  timeout,
 	}
 }
 
@@ -282,7 +284,7 @@ func (h *GeminiHandler) sendRequest(ctx context.Context, req GeminiRequest) (*Ge
 
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: h.timeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("发送请求失败: %w", err)

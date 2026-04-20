@@ -12,12 +12,6 @@ matting:
 storage:
   mode: local
   local_path: ./backend/data/generated
-  oss_endpoint: ""
-  oss_bucket: ""
-  oss_bucket_prefix: ""
-  oss_access_key: ""
-  oss_secret_key: ""
-  dashscope_api_key: ""
 
 skill:
   use_database: true
@@ -29,13 +23,12 @@ models:
   gemini: gemini-1.5-flash
   wan: wanx-plus
   qwen: qwen3.6-plus
+  http_timeout_minutes: 20
 
 alioss:
   enabled: true
   auto_start: true
   binary_path: ./bin/oss-cli
-  port: 18080
-  openai_api_key: ""
   health_wait_seconds: 15
 
 import:
