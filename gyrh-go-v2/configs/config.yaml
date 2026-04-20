@@ -1,0 +1,47 @@
+server:
+  port: 8080
+  read_timeout: 60
+  write_timeout: 60
+
+matting:
+  enabled: true
+  model: mediapipe
+  model_path: ./backend/models/mediapipe/selfie_segmentation_landscape.tflite
+  server_url: http://127.0.0.1:5000
+
+storage:
+  mode: local
+  local_path: ./backend/data/generated
+  oss_endpoint: ""
+  oss_bucket: ""
+  oss_bucket_prefix: ""
+  oss_access_key: ""
+  oss_secret_key: ""
+  dashscope_api_key: ""
+
+skill:
+  use_database: true
+  local_path: ./configs/skills
+  import_trigger_file: ./configs/SKILL导入
+  watch_interval_seconds: 5
+
+alioss:
+  enabled: true
+  auto_start: true
+  binary_path: ./bin/oss-cli-darwin-arm64
+  port: 18080
+  openai_api_key: ""
+  health_wait_seconds: 15
+
+import:
+  enabled: true
+  generated_dir: ./backend/data/generated_import
+  watch_interval_seconds: 10
+
+gallery:
+  external_url: http://localhost:8080
+
+logger:
+  level: info
+  path: ./backend/logs
+  max_age: 30
