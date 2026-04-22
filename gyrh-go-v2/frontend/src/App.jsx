@@ -22,12 +22,19 @@ function App() {
   );
 
   function changeScreen(nextScreen) {
+    console.log(`[App] Navigate to screen: ${nextScreen}`);
     startTransition(() => {
       setScreen(nextScreen);
     });
   }
 
-  const toggleModel = () => setModel(prev => (prev === 'W' ? 'G' : 'W'));
+  const toggleModel = () => {
+    setModel(prev => {
+      const next = prev === 'W' ? 'G' : 'W';
+      console.log(`[App] Toggle model: ${next}`);
+      return next;
+    });
+  };
   const goHome = () => changeScreen('dashboard');
   const goHistory = () => changeScreen('history');
   const goBackgrounds = () => changeScreen('backgrounds');

@@ -52,7 +52,8 @@ func (m *Manager) Start(ctx context.Context) error {
 		args = append(args, "--config", configPath)
 	}
 
-	cmd := exec.CommandContext(ctx, binaryPath, args...)
+	// 注意这里去掉了 ctx，防止上层 ctx cancel 时直接把子进程干掉
+	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = projectRoot
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -71,7 +72,8 @@ func (m *Manager) Start(ctx context.Context) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return fmt.Errorf("等待 aliOSS 服务就绪超时")
+	// 等待超时，尝试读取二进制输出帮助排查问题
+	return fmt.Errorf("等待 aliOSS 服务就绪超时，请检查 OSS_ACCESS_KEY_ID 是否正确配置，或者查看控制台错误输出")
 }
 
 func (m *Manager) resolveAgentConfigPath(projectRoot string) string {
@@ -165,7 +167,12 @@ func (m *Manager) ping() error {
 		req.Header.Set("Authorization", "Bearer "+m.cfg.OpenAIAPIKey)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	// 增加超时机制，防止假死阻塞健康检查
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

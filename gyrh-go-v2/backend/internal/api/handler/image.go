@@ -341,6 +341,17 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 		logger.Error("解析改写请求失败: %v", err)
 		return writeJSONError(w, http.StatusBadRequest, "请求参数解析失败")
 	}
+	
+	// 详细打印前端请求
+	logger.Debug("========== 收到前端 Rewrite 请求 ==========")
+	logger.Debug("Provider: %s", req.Provider)
+	logger.Debug("BackgroundPromptID: %d", req.BackgroundPromptID)
+	logger.Debug("StylePrompt: %s", req.StylePrompt)
+	logger.Debug("LegacyPrompt: %s", req.LegacyPrompt)
+	logger.Debug("Foreground Base64 Length: %d", len(req.Foreground))
+	logger.Debug("Background Base64 Length: %d", len(req.Background))
+	logger.Debug("References Count: %d", len(req.References))
+	logger.Debug("==========================================")
 
 	// 设置默认 provider
 	if req.Provider == "" {

@@ -117,6 +117,8 @@ func migrateTables(db *sql.DB) error {
 			gemini_negative_prompt TEXT NOT NULL DEFAULT '',
 			wan_prompt TEXT NOT NULL DEFAULT '',
 			wan_negative_prompt TEXT NOT NULL DEFAULT '',
+			image_asset_id TEXT NOT NULL DEFAULT '',
+			image_url TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
@@ -124,6 +126,14 @@ func migrateTables(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("创建 background_prompts 表失败: %w", err)
 	}
+
+	// 自动升级字段
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN image_asset_id TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN image_url TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gemini_prompt_zh TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gemini_negative_prompt_zh TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN wan_prompt_zh TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN wan_negative_prompt_zh TEXT NOT NULL DEFAULT ''")
 
 	// 创建 llm_prompt_templates 表（大模型提示词模板）
 	_, err = db.Exec(`

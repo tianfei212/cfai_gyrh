@@ -70,7 +70,7 @@ func formatTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05.000")
 }
 
-// 初始化日志器
+// Init 初始化日志器
 func Init(config Config) {
 	once.Do(func() {
 		// 设置默认值
@@ -84,7 +84,7 @@ func Init(config Config) {
 			config.MaxSize = 100
 		}
 		if config.CallerDept == 0 {
-			config.CallerDept = 2
+			config.CallerDept = 4 // 修改调用栈深度以正确显示业务函数
 		}
 
 		defaultLogger = &Logger{
@@ -200,21 +200,30 @@ func (l *Logger) output(level Level, msg string) {
 	if l.file != nil {
 		l.file.WriteString(message)
 		// 检查文件大小
-		info, _ := l.file.Stat()
-		if info.Size() > l.config.MaxSize*1024*1024 {
+		info, err := l.file.Stat()
+		if err == nil && info.Size() > l.config.MaxSize*1024*1024 {
 			l.rotateFile()
 		}
 	}
 }
 
-// 切割日志文件
+// 切割日志文件 (调用此方法前必须持有 l.fileMu 锁)
 func (l *Logger) rotateFile() {
 	if l.file != nil {
 		l.file.Close()
 	}
 	backupName := filepath.Join(l.config.Directory, fmt.Sprintf("app_%s_%d.log", l.date, time.Now().Unix()))
 	os.Rename(filepath.Join(l.config.Directory, fmt.Sprintf("app_%s.log", l.date)), backupName)
-	l.initFile()
+
+	// 不加锁的初始化文件逻辑，避免死锁
+	filename := filepath.Join(l.config.Directory, fmt.Sprintf("app_%s.log", l.date))
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Printf("切割日志后打开文件失败: %v\n", err)
+		l.file = nil
+		return
+	}
+	l.file = file
 }
 
 // Debug 输出调试日志

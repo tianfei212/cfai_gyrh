@@ -11,6 +11,7 @@ import (
 
 	"gyrh-go-v2/backend/internal/core/llm/qwen"
 	"gyrh-go-v2/backend/internal/db"
+	"gyrh-go-v2/backend/internal/logger"
 	"gyrh-go-v2/backend/internal/storage"
 	"gyrh-go-v2/backend/pkg/httpx"
 )
@@ -80,11 +81,15 @@ func (h *BackgroundPromptHandler) Get(w http.ResponseWriter, r *http.Request) {
 // Create 创建背景图提示词模板。
 func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name                 string `json:"name"`
-		GeminiPrompt         string `json:"gemini_prompt"`
-		GeminiNegativePrompt string `json:"gemini_negative_prompt"`
-		WanPrompt            string `json:"wan_prompt"`
-		WanNegativePrompt    string `json:"wan_negative_prompt"`
+		Name                   string `json:"name"`
+		GeminiPrompt           string `json:"gemini_prompt"`
+		GeminiNegativePrompt   string `json:"gemini_negative_prompt"`
+		GeminiPromptZH         string `json:"gemini_prompt_zh"`
+		GeminiNegativePromptZH string `json:"gemini_negative_prompt_zh"`
+		WanPrompt              string `json:"wan_prompt"`
+		WanNegativePrompt      string `json:"wan_negative_prompt"`
+		WanPromptZH            string `json:"wan_prompt_zh"`
+		WanNegativePromptZH    string `json:"wan_negative_prompt_zh"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "请求体格式错误"))
@@ -109,8 +114,14 @@ func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request)
 		req.Name,
 		req.GeminiPrompt,
 		req.GeminiNegativePrompt,
+		req.GeminiPromptZH,
+		req.GeminiNegativePromptZH,
 		req.WanPrompt,
 		req.WanNegativePrompt,
+		req.WanPromptZH,
+		req.WanNegativePromptZH,
+		"",
+		"",
 	)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "创建背景图提示词模板失败"))
@@ -135,11 +146,15 @@ func (h *BackgroundPromptHandler) Update(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Name                 *string `json:"name"`
-		GeminiPrompt         *string `json:"gemini_prompt"`
-		GeminiNegativePrompt *string `json:"gemini_negative_prompt"`
-		WanPrompt            *string `json:"wan_prompt"`
-		WanNegativePrompt    *string `json:"wan_negative_prompt"`
+		Name                   *string `json:"name"`
+		GeminiPrompt           *string `json:"gemini_prompt"`
+		GeminiNegativePrompt   *string `json:"gemini_negative_prompt"`
+		GeminiPromptZH         *string `json:"gemini_prompt_zh"`
+		GeminiNegativePromptZH *string `json:"gemini_negative_prompt_zh"`
+		WanPrompt              *string `json:"wan_prompt"`
+		WanNegativePrompt      *string `json:"wan_negative_prompt"`
+		WanPromptZH            *string `json:"wan_prompt_zh"`
+		WanNegativePromptZH    *string `json:"wan_negative_prompt_zh"`
 	}
 	if decodeErr := json.NewDecoder(r.Body).Decode(&req); decodeErr != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "请求体格式错误"))
@@ -164,11 +179,15 @@ func (h *BackgroundPromptHandler) Update(w http.ResponseWriter, r *http.Request)
 	}
 
 	patch := db.BackgroundPromptPatch{
-		Name:                 req.Name,
-		GeminiPrompt:         req.GeminiPrompt,
-		GeminiNegativePrompt: req.GeminiNegativePrompt,
-		WanPrompt:            req.WanPrompt,
-		WanNegativePrompt:    req.WanNegativePrompt,
+		Name:                   req.Name,
+		GeminiPrompt:           req.GeminiPrompt,
+		GeminiNegativePrompt:   req.GeminiNegativePrompt,
+		GeminiPromptZH:         req.GeminiPromptZH,
+		GeminiNegativePromptZH: req.GeminiNegativePromptZH,
+		WanPrompt:              req.WanPrompt,
+		WanNegativePrompt:      req.WanNegativePrompt,
+		WanPromptZH:            req.WanPromptZH,
+		WanNegativePromptZH:    req.WanNegativePromptZH,
 	}
 	if err := h.repo.Update(id, patch); err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "更新背景图提示词模板失败"))
@@ -232,6 +251,108 @@ func (h *BackgroundPromptHandler) SuggestDefaults(w http.ResponseWriter, r *http
 	httpx.WriteJSON(w, http.StatusOK, httpx.Success(result))
 }
 
+// Import 导入背景图并自动生成提示词。
+func (h *BackgroundPromptHandler) Import(w http.ResponseWriter, r *http.Request) {
+	if h.qwenAdvisor == nil || h.storageService == nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "Qwen 建议服务未初始化"))
+		return
+	}
+
+	var req struct {
+		Image string `json:"image"` // Base64 编码的图像
+		Name  string `json:"name"`  // 可选，名称
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "请求体格式错误"))
+		return
+	}
+
+	req.Image = strings.TrimSpace(req.Image)
+	if req.Image == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "image 不能为空"))
+		return
+	}
+
+	data, err := base64.StdEncoding.DecodeString(req.Image)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "image 不是合法的 Base64"))
+		return
+	}
+
+	// 1. 保存图像到存储
+	ctx := r.Context()
+	logger.Info("开始导入背景图, 大小: %d bytes, 文件名: %s", len(data), req.Name)
+	assetID, err := h.storageService.SaveWithKind(ctx, data, fmt.Sprintf("imported_bg_%d.png", time.Now().UnixNano()), storage.SaveKindAsset)
+	if err != nil {
+		logger.Error("保存背景图到存储失败: %v", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "保存背景图失败"))
+		return
+	}
+	logger.Info("保存背景图成功, assetID: %s", assetID)
+
+	imageURL, err := h.storageService.GetImageURL(ctx, assetID)
+	if err != nil {
+		logger.Error("获取背景图URL失败: %v", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "获取背景图URL失败"))
+		return
+	}
+	logger.Info("获取背景图URL成功, URL: %s", imageURL)
+
+	// 2. 调用 Qwen 建议提示词
+	logger.Info("开始调用 Qwen 建议提示词, assetID: %s", assetID)
+	result, err := h.qwenAdvisor.SuggestFromAsset(ctx, assetID)
+	if err != nil {
+		logger.Error("Qwen 生成背景图提示词失败: %v", err)
+		// 记录错误，但可以继续创建空的提示词
+		// 这里选择直接返回错误，保证导入体验完整
+		_ = h.storageService.Delete(context.Background(), assetID)
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "生成背景图提示词失败: "+err.Error()))
+		return
+	}
+	logger.Info("Qwen 建议提示词成功")
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = fmt.Sprintf("Imported-%s", time.Now().Format("20060102-150405"))
+	}
+
+	// 3. 保存到数据库
+	logger.Info("开始将背景图提示词保存到数据库, name: %s", name)
+	id, err := h.repo.Create(
+		name,
+		result.GeminiPromptEN,
+		result.GeminiNegativePromptEN,
+		result.GeminiPromptZH,
+		result.GeminiNegativePromptZH,
+		result.WanPromptEN,
+		result.WanNegativePromptEN,
+		result.WanPromptZH,
+		result.WanNegativePromptZH,
+		assetID,
+		imageURL,
+	)
+	if err != nil {
+		logger.Error("保存背景图提示词到数据库失败: %v", err)
+		_ = h.storageService.Delete(context.Background(), assetID)
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "保存背景图记录失败"))
+		return
+	}
+	logger.Info("保存背景图提示词到数据库成功, id: %d", id)
+
+	item, err := h.repo.GetByID(id)
+	if err != nil {
+		logger.Error("获取新建背景图失败: %v", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "获取新建背景图失败"))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if encodeErr := json.NewEncoder(w).Encode(httpx.Success(toBackgroundPromptItem(item))); encodeErr != nil {
+		logger.Error("JSON 编码失败: %v", encodeErr)
+	}
+}
+
 // SyncEnglish 根据中文提示词同步英文版本。
 func (h *BackgroundPromptHandler) SyncEnglish(w http.ResponseWriter, r *http.Request) {
 	if h.qwenAdvisor == nil {
@@ -264,14 +385,20 @@ func (h *BackgroundPromptHandler) SyncEnglish(w http.ResponseWriter, r *http.Req
 
 func toBackgroundPromptItem(item *db.BackgroundPrompt) map[string]any {
 	return map[string]any{
-		"id":                     item.ID,
-		"name":                   item.Name,
-		"gemini_prompt":          item.GeminiPrompt,
-		"gemini_negative_prompt": item.GeminiNegativePrompt,
-		"wan_prompt":             item.WanPrompt,
-		"wan_negative_prompt":    item.WanNegativePrompt,
-		"created_at":             item.CreatedAt.Format(time.RFC3339),
-		"updated_at":             item.UpdatedAt.Format(time.RFC3339),
+		"id":                        item.ID,
+		"name":                      item.Name,
+		"gemini_prompt":             item.GeminiPrompt,
+		"gemini_negative_prompt":    item.GeminiNegativePrompt,
+		"gemini_prompt_zh":          item.GeminiPromptZH,
+		"gemini_negative_prompt_zh": item.GeminiNegativePromptZH,
+		"wan_prompt":                item.WanPrompt,
+		"wan_negative_prompt":       item.WanNegativePrompt,
+		"wan_prompt_zh":             item.WanPromptZH,
+		"wan_negative_prompt_zh":    item.WanNegativePromptZH,
+		"image_asset_id":            item.ImageAssetID,
+		"image_url":                 item.ImageURL,
+		"created_at":                item.CreatedAt.Format(time.RFC3339),
+		"updated_at":                item.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

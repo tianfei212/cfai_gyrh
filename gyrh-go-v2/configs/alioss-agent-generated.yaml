@@ -1,0 +1,10 @@
+oss:
+  endpoint: "https://oss-cn-beijing.aliyuncs.com"
+  bucket_name: "oss-416-talon"
+  bucket_prefix: "gyrh_images_data/"
+  generated_bucket_prefix: "gyrh_images_data/"
+
+server:
+  port: 18081
+  link_expire_seconds: 3600
+  openai_api_key: "44567sdfnskldfjoksdf"

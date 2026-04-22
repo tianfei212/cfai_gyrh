@@ -1,9 +1,43 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
 import { SearchIcon, ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
-import { historyCards } from '../constants';
+import { fetchApi } from '../services/api';
 
 export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, model }) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 12;
+
+  const fetchHistory = async (pageNumber) => {
+    try {
+      setLoading(true);
+      const offset = (pageNumber - 1) * limit;
+      const data = await fetchApi(`/api/v1/images?limit=${limit}&offset=${offset}`);
+      setHistory(data.images || []);
+      setTotal(data.total || 0);
+    } catch (err) {
+      console.error('Failed to fetch history:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory(page);
+  }, [page]);
+
+  const totalPages = Math.ceil(total / limit) || 1;
+
+  const handlePrev = () => {
+    if (page > 1) setPage(page - 1);
+  };
+
+  const handleNext = () => {
+    if (page < totalPages) setPage(page + 1);
+  };
+
   return (
     <SimpleFrame 
       title="AI Smart Portrait · 历史记录管理"
@@ -15,36 +49,34 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     >
       <section className="glass-section history-panel">
         <div className="section-stack">
-          <h2>生成记录（标签筛选）</h2>
+          <h2>生成记录（全部）</h2>
           <div className="chip-row compact">
-            {['全部', '人像', '背景', '构图', '写实'].map((tag, index) => (
-              <button
-                key={tag}
-                className={`tiny-chip ${index === 0 ? 'active' : ''}`}
-                type="button"
-              >
-                {tag}
-              </button>
-            ))}
+            <button className="tiny-chip active" type="button" onClick={() => fetchHistory(1)}>刷新</button>
           </div>
         </div>
-        <button className="ghost-pill icon-pill small-float" type="button">
-          <SearchIcon />
-        </button>
         <div className="history-grid">
-          {historyCards.map((card) => (
-            <div
-              key={card.id}
-              className={`history-card tone-${card.tone}`}
-            />
-          ))}
+          {loading ? (
+            <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>加载中...</div>
+          ) : history.length === 0 ? (
+             <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>暂无生成记录</div>
+          ) : (
+            history.map((card) => (
+              <div
+                key={card.id}
+                className="history-card"
+                style={{ backgroundImage: card.url ? `url(${card.url})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
+                title={`模型: ${card.provider || '未知'} | 时间: ${new Date(card.created_at).toLocaleString()}`}
+                onClick={() => window.open(card.url, '_blank')}
+              />
+            ))
+          )}
         </div>
         <div className="history-footer">
-          <button className="slider-button fill" type="button">
+          <button className="slider-button fill" type="button" onClick={handlePrev} disabled={page === 1}>
             <ChevronLeftIcon />
           </button>
-          <div className="pager-badge">1 / 12</div>
-          <button className="slider-button fill" type="button">
+          <div className="pager-badge">{page} / {totalPages}</div>
+          <button className="slider-button fill" type="button" onClick={handleNext} disabled={page === totalPages}>
             <ChevronRightIcon />
           </button>
         </div>

@@ -1,12 +1,30 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { WorkbenchLayout, HeaderIcon, HistorySidebar } from '../components/Layout';
 import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
-import { galleryCards } from '../constants';
+import { fetchApi } from '../services/api';
 
 export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, model }) {
   const fileInputRef = useRef(null);
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [backgrounds, setBackgrounds] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchBackgrounds = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchApi('/api/v1/background-prompts');
+      setBackgrounds(data.items || data.prompts || []);
+    } catch (err) {
+      console.error('Failed to fetch backgrounds:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBackgrounds();
+  }, []);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -147,7 +165,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
         <div className="section-topline">
           <h2>背景图库</h2>
           <div className="topbar-actions">
-            <button className="ghost-pill icon-pill" type="button">
+            <button className="ghost-pill icon-pill" type="button" onClick={fetchBackgrounds}>
               <RefreshIcon />
             </button>
             <button className="ghost-pill icon-pill" type="button" onClick={onBackgrounds}>
@@ -156,16 +174,23 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
           </div>
         </div>
         <div className="gallery-grid">
-          {galleryCards.map((card) => (
-            <article
-              key={card.name}
-              className={`gallery-card tone-${card.tone}`}
-              onClick={handleUseImage(card)}
-              style={{ cursor: 'pointer' }}
-            >
-              <span>{card.name}</span>
-            </article>
-          ))}
+          {loading ? (
+             <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>加载中...</div>
+          ) : backgrounds.length === 0 ? (
+             <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>暂无背景图数据</div>
+          ) : (
+            backgrounds.map((card) => (
+              <article
+                key={card.id}
+                className="gallery-card"
+                onClick={handleUseImage(card)}
+                style={{ cursor: 'pointer', backgroundImage: card.image_url ? `url(${card.image_url})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
+                title={model === 'W' ? card.wan_prompt : card.gemini_prompt}
+              >
+                <span style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 8px', borderRadius: '4px' }}>{card.name || `背景 ${card.id}`}</span>
+              </article>
+            ))
+          )}
         </div>
         <div className="footer-slider">
           <button className="slider-button" type="button">

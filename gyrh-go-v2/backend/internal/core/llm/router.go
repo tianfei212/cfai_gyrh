@@ -91,6 +91,13 @@ func (s *service) Compose(ctx context.Context, params ComposeParams) (*ComposeRe
 		return nil, err
 	}
 
+	logger.Debug("========== LLM Compose Request ==========")
+	logger.Debug("Provider: %s", provider)
+	logger.Debug("BackgroundPromptID: %d", params.BackgroundPromptID)
+	logger.Debug("Images Count: %d", len(params.Images))
+	logger.Debug("Prompt: \n%s", prompt)
+	logger.Debug("=========================================")
+
 	switch provider {
 	case "wan":
 		result, err := s.wanHandler.Compose(ctx, &wan.ComposeParams{
@@ -99,8 +106,19 @@ func (s *service) Compose(ctx context.Context, params ComposeParams) (*ComposeRe
 			ReferenceImages: convertWanReferences(params.Images),
 		}, prompt)
 		if err != nil {
+			logger.Error("LLM Wan Compose Error: %v", err)
 			return nil, err
 		}
+		
+		logger.Debug("========== LLM Wan Compose Response ==========")
+		if result.Error != nil {
+			logger.Debug("Result Error: %v", result.Error)
+		} else {
+			logger.Debug("Result ImageURL: %s", result.ImageURL)
+			logger.Debug("Result Base64 Length: %d", len(result.Base64))
+		}
+		logger.Debug("==============================================")
+		
 		return &ComposeResult{
 			ImageURL: result.ImageURL,
 			Base64:   result.Base64,
@@ -113,8 +131,19 @@ func (s *service) Compose(ctx context.Context, params ComposeParams) (*ComposeRe
 			ReferenceImages: convertGeminiReferences(params.Images),
 		}, prompt)
 		if err != nil {
+			logger.Error("LLM Gemini Compose Error: %v", err)
 			return nil, err
 		}
+		
+		logger.Debug("========== LLM Gemini Compose Response ==========")
+		if result.Error != nil {
+			logger.Debug("Result Error: %v", result.Error)
+		} else {
+			logger.Debug("Result ImageURL: %s", result.ImageURL)
+			logger.Debug("Result Base64 Length: %d", len(result.Base64))
+		}
+		logger.Debug("=================================================")
+		
 		return &ComposeResult{
 			ImageURL: result.ImageURL,
 			Base64:   result.Base64,

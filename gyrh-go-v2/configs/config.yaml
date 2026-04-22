@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 9913
   read_timeout: 60
   write_timeout: 60
 
@@ -10,7 +10,7 @@ matting:
   server_url: http://127.0.0.1:5000
 
 storage:
-  mode: local
+  mode: oss
   local_path: ./backend/data/generated
 
 skill:
@@ -37,9 +37,9 @@ import:
   watch_interval_seconds: 10
 
 gallery:
-  external_url: http://localhost:8080
+  external_url: http://localhost:9913
 
 logger:
-  level: info
+  level: debug
   path: ./backend/logs
   max_age: 30

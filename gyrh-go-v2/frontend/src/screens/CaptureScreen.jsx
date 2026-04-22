@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 import { SimpleFrame } from '../components/Layout';
 import { CameraIcon, ClockIcon } from '../components/Icons';
+import { fetchApi } from '../services/api';
 
 export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, model, selectedBg, onPreview }) {
   const videoRef = useRef(null);
@@ -70,6 +71,22 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
         />
       );
     }
+    if (typeof selectedBg === 'object' && selectedBg.image_url) {
+      return (
+        <img 
+          src={selectedBg.image_url} 
+          alt="Selected Background" 
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            zIndex: 1
+          }}
+        />
+      );
+    }
     return (
       <div 
         className={`tone-${selectedBg.tone}`}
@@ -90,22 +107,13 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     setIsCapturing(true);
     const videoElement = videoRef.current;
     
-    selfieSegmentationRef.current.onResults((results) => {
+    selfieSegmentationRef.current.onResults(async (results) => {
       const canvas = document.createElement('canvas');
       canvas.width = results.image.width;
       canvas.height = results.image.height;
       const ctx = canvas.getContext('2d');
 
-      // 1. Draw Solid Background (Portrait style as requested before: only show person on solid bg after capture)
-      let bgColor = '#ffffff';
-      if (selectedBg && typeof selectedBg === 'object') {
-        if (selectedBg.tone === 'blue') bgColor = '#0055ff';
-        else if (selectedBg.tone === 'red') bgColor = '#ff0000';
-      }
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // 2. Extract Person
+      // Extract Person
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
@@ -114,12 +122,67 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       tempCtx.globalCompositeOperation = 'source-in';
       tempCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
-      // 3. Draw Person on Solid BG
-      ctx.drawImage(tempCanvas, 0, 0);
+      const foregroundDataUrl = tempCanvas.toDataURL('image/png');
+      const foregroundBase64 = foregroundDataUrl.split(',')[1];
 
-      const dataUrl = canvas.toDataURL('image/png');
-      onPreview(dataUrl);
-      setIsCapturing(false);
+      let backgroundBase64 = null;
+      let backgroundPromptId = 0;
+
+      if (selectedBg) {
+        try {
+          if (typeof selectedBg === 'object' && selectedBg.image_url) {
+            backgroundPromptId = selectedBg.id;
+            const res = await fetch(selectedBg.image_url);
+            const blob = await res.blob();
+            backgroundBase64 = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result.split(',')[1]);
+              reader.readAsDataURL(blob);
+            });
+          } else if (typeof selectedBg === 'string' && (selectedBg.startsWith('blob:') || selectedBg.startsWith('http'))) {
+            // Local loaded image (blob) or remote URL
+            backgroundPromptId = 1; // Default fallback for local image
+            const res = await fetch(selectedBg);
+            const blob = await res.blob();
+            backgroundBase64 = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result.split(',')[1]);
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch (err) {
+          console.error('Failed to process background image:', err);
+        }
+      }
+
+      try {
+        const payload = {
+          foreground: foregroundBase64,
+          provider: model === 'W' ? 'wan' : 'google'
+        };
+
+        if (backgroundBase64) {
+          payload.background = backgroundBase64;
+          payload.background_prompt_id = backgroundPromptId;
+        }
+
+        const data = await fetchApi('/api/v1/images/rewrite', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        if (data && data.image_url) {
+          onPreview(data.image_url);
+        } else {
+          onPreview(foregroundDataUrl);
+        }
+      } catch (err) {
+        console.error('Failed to rewrite image:', err);
+        alert('生成失败: ' + err.message);
+        onPreview(foregroundDataUrl);
+      } finally {
+        setIsCapturing(false);
+      }
     });
 
     await selfieSegmentationRef.current.send({ image: videoElement });

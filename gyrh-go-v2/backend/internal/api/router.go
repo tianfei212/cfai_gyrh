@@ -8,6 +8,7 @@ import (
 
 	"gyrh-go-v2/backend/internal/api/handler"
 	"gyrh-go-v2/backend/internal/api/middleware"
+	"gyrh-go-v2/backend/internal/logger"
 	"gyrh-go-v2/backend/pkg/httpx"
 )
 
@@ -21,6 +22,7 @@ func RegisterRoutes(
 	backgroundPromptHandler *handler.BackgroundPromptHandler,
 	authConfig *middleware.AuthConfig,
 ) {
+	router.Use(middleware.Logger())
 	router.Use(middleware.CORS())
 
 	api := router.PathPrefix("/api/v1").Subrouter()
@@ -56,6 +58,7 @@ func RegisterRoutes(
 	protected.HandleFunc("/llm-prompt-templates/{id}", llmPromptTemplateHandler.Delete).Methods(http.MethodDelete)
 
 	protected.HandleFunc("/background-prompts", backgroundPromptHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/background-prompts/import", backgroundPromptHandler.Import).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/suggest-defaults", backgroundPromptHandler.SuggestDefaults).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/sync-english", backgroundPromptHandler.SyncEnglish).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Get).Methods(http.MethodGet)
@@ -67,6 +70,8 @@ func RegisterRoutes(
 func adaptErr(fn func(context.Context, http.ResponseWriter, *http.Request) error) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := fn(r.Context(), w, r); err != nil {
+			// 在服务端打印错误日志
+			logger.Error("[%s] %s %s - Handler Error: %v", r.Method, r.Host, r.URL.Path, err)
 			httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, err.Error()))
 		}
 	})
