@@ -9,6 +9,7 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
   const canvasRef = useRef(null);
   const [opacity, setOpacity] = useState(0.8);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [capturedOriginal, setCapturedOriginal] = useState(null);
   const selfieSegmentationRef = useRef(null);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       if (selfieSegmentationRef.current) {
         selfieSegmentationRef.current.close();
       }
+      sessionStorage.removeItem('mattedImage');
     };
   }, []);
 
@@ -74,7 +76,7 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     if (typeof selectedBg === 'object' && selectedBg.image_url) {
       return (
         <img 
-          src={selectedBg.image_url} 
+          src={`/api/v1/images/thumbnail?url=${encodeURIComponent(selectedBg.image_url)}&w=1280&h=720`}
           alt="Selected Background" 
           style={{
             position: 'absolute',
@@ -107,6 +109,14 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     setIsCapturing(true);
     const videoElement = videoRef.current;
     
+    // Capture original frame immediately
+    const origCanvas = document.createElement('canvas');
+    origCanvas.width = videoElement.videoWidth || 1280;
+    origCanvas.height = videoElement.videoHeight || 720;
+    const origCtx = origCanvas.getContext('2d');
+    origCtx.drawImage(videoElement, 0, 0, origCanvas.width, origCanvas.height);
+    const originalDataUrl = origCanvas.toDataURL('image/jpeg', 0.9);
+    
     selfieSegmentationRef.current.onResults(async (results) => {
       const canvas = document.createElement('canvas');
       canvas.width = results.image.width;
@@ -123,69 +133,94 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       tempCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
       const foregroundDataUrl = tempCanvas.toDataURL('image/png');
-      const foregroundBase64 = foregroundDataUrl.split(',')[1];
-
-      let backgroundBase64 = null;
-      let backgroundPromptId = 0;
-
-      if (selectedBg) {
-        try {
-          if (typeof selectedBg === 'object' && selectedBg.image_url) {
-            backgroundPromptId = selectedBg.id;
-            const res = await fetch(selectedBg.image_url);
-            const blob = await res.blob();
-            backgroundBase64 = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result.split(',')[1]);
-              reader.readAsDataURL(blob);
-            });
-          } else if (typeof selectedBg === 'string' && (selectedBg.startsWith('blob:') || selectedBg.startsWith('http'))) {
-            // Local loaded image (blob) or remote URL
-            backgroundPromptId = 1; // Default fallback for local image
-            const res = await fetch(selectedBg);
-            const blob = await res.blob();
-            backgroundBase64 = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result.split(',')[1]);
-              reader.readAsDataURL(blob);
-            });
-          }
-        } catch (err) {
-          console.error('Failed to process background image:', err);
-        }
-      }
-
-      try {
-        const payload = {
-          foreground: foregroundBase64,
-          provider: model === 'W' ? 'wan' : 'google'
-        };
-
-        if (backgroundBase64) {
-          payload.background = backgroundBase64;
-          payload.background_prompt_id = backgroundPromptId;
-        }
-
-        const data = await fetchApi('/api/v1/images/rewrite', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-
-        if (data && data.image_url) {
-          onPreview(data.image_url);
-        } else {
-          onPreview(foregroundDataUrl);
-        }
-      } catch (err) {
-        console.error('Failed to rewrite image:', err);
-        alert('生成失败: ' + err.message);
-        onPreview(foregroundDataUrl);
-      } finally {
-        setIsCapturing(false);
-      }
+      
+      // Store matted image in sessionStorage
+      sessionStorage.setItem('mattedImage', foregroundDataUrl);
+      
+      // Set captured original to show it
+      setCapturedOriginal(originalDataUrl);
+      setIsCapturing(false);
     });
 
     await selfieSegmentationRef.current.send({ image: videoElement });
+  };
+
+  const handleDiscard = () => {
+    setCapturedOriginal(null);
+    sessionStorage.removeItem('mattedImage');
+  };
+
+  const handleUse = async () => {
+    const foregroundDataUrl = sessionStorage.getItem('mattedImage');
+    if (!foregroundDataUrl) {
+      alert('未找到已抠像的照片，请重新拍摄。');
+      return;
+    }
+    
+    setIsCapturing(true);
+    const foregroundBase64 = foregroundDataUrl.split(',')[1];
+
+    let backgroundBase64 = null;
+    let backgroundPromptId = 0;
+
+    if (selectedBg) {
+      try {
+        if (typeof selectedBg === 'object' && selectedBg.image_url) {
+          backgroundPromptId = selectedBg.id;
+          const res = await fetch(selectedBg.image_url);
+          const blob = await res.blob();
+          backgroundBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(blob);
+          });
+        } else if (typeof selectedBg === 'string' && (selectedBg.startsWith('blob:') || selectedBg.startsWith('http'))) {
+          // Local loaded image (blob) or remote URL
+          backgroundPromptId = 1; // Default fallback for local image
+          const res = await fetch(selectedBg);
+          const blob = await res.blob();
+          backgroundBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(blob);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to process background image:', err);
+      }
+    }
+
+    try {
+      const payload = {
+        foreground: foregroundBase64,
+        provider: model === 'W' ? 'wan' : 'google'
+      };
+
+      if (backgroundBase64) {
+        payload.background = backgroundBase64;
+        payload.background_prompt_id = backgroundPromptId;
+      }
+
+      const data = await fetchApi('/api/v1/images/rewrite', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      sessionStorage.removeItem('mattedImage');
+      
+      if (data && data.image_url) {
+        onPreview(data.image_url);
+      } else {
+        onPreview(foregroundDataUrl);
+      }
+    } catch (err) {
+      console.error('Failed to rewrite image:', err);
+      alert('生成失败: ' + err.message);
+      sessionStorage.removeItem('mattedImage');
+      onPreview(foregroundDataUrl);
+    } finally {
+      setIsCapturing(false);
+    }
   };
 
   return (
@@ -202,6 +237,21 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
           <div className="capture-stage" style={{ position: 'relative', overflow: 'hidden', background: '#000' }}>
             {renderBackground()}
             
+            {capturedOriginal && (
+              <img 
+                src={capturedOriginal} 
+                alt="Captured Original"
+                style={{
+                  position: 'relative',
+                  zIndex: 2,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  opacity: opacity
+                }}
+              />
+            )}
+            
             <video 
               ref={videoRef}
               autoPlay
@@ -213,7 +263,8 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                opacity: opacity
+                opacity: opacity,
+                display: capturedOriginal ? 'none' : 'block'
               }}
             />
 
@@ -240,14 +291,24 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
             </div>
           </div>
           <div className="capture-actions">
-            <button className="soft-button" type="button" onClick={onHome}>X 放弃</button>
-            <button className="soft-button primary" type="button" onClick={handleCapture} disabled={isCapturing}>
-              <CameraIcon />
-              {isCapturing ? '生成中...' : '拍摄'}
+            <button className="soft-button" type="button" onClick={capturedOriginal ? handleDiscard : onHome}>
+              X {capturedOriginal ? '放弃' : '返回'}
             </button>
-            <button className="soft-button" type="button">
-              <ClockIcon />
-              使用
+            
+            {!capturedOriginal ? (
+              <button className="soft-button primary" type="button" onClick={handleCapture} disabled={isCapturing}>
+                <CameraIcon />
+                拍摄
+              </button>
+            ) : (
+              <button className="soft-button primary" type="button" onClick={handleUse} disabled={isCapturing}>
+                <ClockIcon />
+                使用
+              </button>
+            )}
+
+            <button className="soft-button" type="button" style={{ visibility: 'hidden' }}>
+              <ClockIcon />使用
             </button>
           </div>
         </section>

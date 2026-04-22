@@ -27,7 +27,7 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
             {capturedImage ? (
               <>
                 <img 
-                  src={capturedImage} 
+                  src={capturedImage && capturedImage.startsWith('/api/v1/images/view') ? `/api/v1/images/thumbnail?url=${encodeURIComponent(capturedImage)}&w=1080&h=1920` : capturedImage} 
                   alt="Captured Portrait" 
                   className="full-preview-img"
                 />

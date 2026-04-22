@@ -70,7 +70,7 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
 
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
           {item.image_url ? (
-            <img src={item.image_url} alt="background" style={{ maxHeight: '300px', maxWidth: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} />
+            <img src={`/api/v1/images/thumbnail?url=${encodeURIComponent(item.image_url)}&w=400&h=400`} alt="background" style={{ maxHeight: '300px', maxWidth: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} />
           ) : (
             <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.5)' }}>无图片</div>
           )}
@@ -254,12 +254,13 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
                 <span>{row.id}</span>
                 <div 
                   className="thumb-swatch" 
-                  style={{ backgroundImage: row.image_url ? `url(${row.image_url})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }} 
+                  style={{ backgroundImage: row.image_url ? `url(/api/v1/images/thumbnail?url=${encodeURIComponent(row.image_url)}&w=150&h=150)` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }} 
                 />
                 <span title={row.wan_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.wan_prompt_zh || '-'}</span>
                 <span title={row.gemini_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gemini_prompt_zh || '-'}</span>
                 <div className="table-actions">
-                  {row.image_url && <button className="mini-outline" type="button" onClick={() => setEditingItem(row)}>查看原图</button>}
+                  {row.image_url && <button className="mini-outline" type="button" onClick={() => window.open(row.image_url, '_blank')}>查看原图</button>}
+                  <button className="mini-outline" type="button" onClick={() => setEditingItem(row)}>编辑</button>
                   <button className="mini-outline" type="button" onClick={() => handleDelete(row.id)}>删除</button>
                 </div>
               </div>

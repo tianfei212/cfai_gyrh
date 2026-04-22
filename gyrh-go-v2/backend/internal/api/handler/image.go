@@ -10,6 +10,7 @@ import (
 	"image"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -210,6 +211,91 @@ func (h *ImageHandler) View(ctx context.Context, w http.ResponseWriter, r *http.
 	return nil
 }
 
+// Thumbnail 图像缩略图重定向
+// GET /images/thumbnail?url=...&w=200&h=80 或 ?asset_id=...&w=200&h=80
+func (h *ImageHandler) Thumbnail(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	imageURL := r.URL.Query().Get("url")
+	assetIDParam := r.URL.Query().Get("asset_id")
+	widthStr := r.URL.Query().Get("w")
+	heightStr := r.URL.Query().Get("h")
+
+	logger.Debug("========== 缩略图请求(Thumbnail Handler) ==========")
+	logger.Debug("原始查询参数 (Raw Query): %s", r.URL.RawQuery)
+	logger.Debug("解析的 url 参数: %s", imageURL)
+	logger.Debug("解析的 asset_id 参数: %s", assetIDParam)
+	logger.Debug("解析的宽度 w: %s, 高度 h: %s", widthStr, heightStr)
+
+	if imageURL == "" && assetIDParam == "" {
+		return writeJSONError(w, http.StatusBadRequest, "缺少url或asset_id参数")
+	}
+
+	wInt, _ := strconv.Atoi(widthStr)
+	hInt, _ := strconv.Atoi(heightStr)
+
+	if wInt <= 0 || hInt <= 0 {
+		// 降级回退
+		logger.Debug("由于宽度或高度无效(w=%d, h=%d)，降级回退至原图", wInt, hInt)
+		if imageURL != "" {
+			http.Redirect(w, r, imageURL, http.StatusFound)
+		} else {
+			url, _ := h.storageService.GetImageURL(ctx, assetIDParam)
+			http.Redirect(w, r, url, http.StatusFound)
+		}
+		return nil
+	}
+
+	var assetID string
+	var fallbackURL string
+
+	if assetIDParam != "" {
+		assetID = assetIDParam
+		fallbackURL, _ = h.storageService.GetImageURL(ctx, assetID)
+	} else {
+		fallbackURL = imageURL
+		u, err := url.Parse(imageURL)
+		if err != nil {
+			logger.Error("解析 imageURL 失败: %v", err)
+			http.Redirect(w, r, fallbackURL, http.StatusFound)
+			return nil
+		}
+
+		fileID := strings.TrimPrefix(u.Path, "/")
+		logger.Debug("从 URL 中解析出 fileID: %s", fileID)
+
+		if !strings.HasPrefix(fileID, "images_data/") {
+			logger.Debug("fileID 不以 images_data/ 开头，降级回退至原图")
+			http.Redirect(w, r, fallbackURL, http.StatusFound)
+			return nil
+		}
+
+		kind := storage.SaveKindAsset
+		if strings.Contains(fileID, "rewrite_") || strings.Contains(fileID, "_sr_4x") || strings.Contains(fileID, "upload_") || strings.Contains(fileID, "generated_") {
+			kind = storage.SaveKindGenerated
+		}
+
+		if kind == storage.SaveKindGenerated {
+			assetID = "generated:" + fileID
+		} else {
+			assetID = "asset:" + fileID
+		}
+	}
+
+	logger.Debug("最终解析出的 assetID: %s", assetID)
+
+	thumbnailURL, err := h.storageService.GetThumbnailURL(ctx, assetID, wInt, hInt)
+	if err != nil {
+		logger.Warn("获取缩略图 URL 失败: %v, 回退到原图", err)
+		http.Redirect(w, r, fallbackURL, http.StatusFound)
+		return nil
+	}
+
+	logger.Debug("生成的缩略图 URL (thumbnailURL): %s", thumbnailURL)
+	logger.Debug("==================================================")
+
+	http.Redirect(w, r, thumbnailURL, http.StatusFound)
+	return nil
+}
+
 // UploadRequest 图像上传请求参数
 type UploadRequest struct {
 	Image    string `json:"image"`    // Base64 编码的图像数据
@@ -341,7 +427,7 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 		logger.Error("解析改写请求失败: %v", err)
 		return writeJSONError(w, http.StatusBadRequest, "请求参数解析失败")
 	}
-	
+
 	// 详细打印前端请求
 	logger.Debug("========== 收到前端 Rewrite 请求 ==========")
 	logger.Debug("Provider: %s", req.Provider)

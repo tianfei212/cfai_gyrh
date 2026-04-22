@@ -29,12 +29,15 @@ func RegisterRoutes(
 	api.HandleFunc("/health", healthCheck).Methods(http.MethodGet)
 	api.HandleFunc("/skills/active", skillHandler.GetActive).Methods(http.MethodGet)
 
+	// 公开的图片资源访问接口，不需要 Header 鉴权，因为常用于 <img> 标签
+	api.Handle("/images/thumbnail", adaptErr(imageHandler.Thumbnail)).Methods(http.MethodGet)
+	api.Handle("/images/download", adaptErr(imageHandler.Download)).Methods(http.MethodGet)
+	api.Handle("/images/view", adaptErr(imageHandler.View)).Methods(http.MethodGet)
+
 	protected := api.NewRoute().Subrouter()
 	protected.Use(middleware.Auth(authConfig))
 
 	protected.Handle("/images", adaptErr(imageHandler.List)).Methods(http.MethodGet)
-	protected.Handle("/images/download", adaptErr(imageHandler.Download)).Methods(http.MethodGet)
-	protected.Handle("/images/view", adaptErr(imageHandler.View)).Methods(http.MethodGet)
 	protected.Handle("/images/upload", adaptErr(imageHandler.Upload)).Methods(http.MethodPost)
 	protected.Handle("/images/rewrite", adaptErr(imageHandler.Rewrite)).Methods(http.MethodPost)
 	protected.Handle("/images", adaptErr(imageHandler.Delete)).Methods(http.MethodDelete)

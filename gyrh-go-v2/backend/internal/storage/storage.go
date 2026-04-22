@@ -46,6 +46,9 @@ type StorageService interface {
 	// GetImageURL 获取用于前端查看的 URL
 	GetImageURL(ctx context.Context, assetID string) (string, error)
 
+	// GetThumbnailURL 获取用于前端查看的缩略图 URL
+	GetThumbnailURL(ctx context.Context, assetID string, w, h int) (string, error)
+
 	// GetForModelUpload 获取用于模型 API 调用的上传路径/URL
 	// provider: 模型提供者 (wan/google)
 	GetForModelUpload(ctx context.Context, assetID string, provider StorageProvider) (string, error)
@@ -124,6 +127,25 @@ func (s *service) GetImageURL(ctx context.Context, assetID string) (string, erro
 		if err != nil {
 			return "", err
 		}
+		return client.GetSignedURL(ctx, rawID, 3600)
+	}
+	return s.local.GetImageURL(ctx, assetID)
+}
+
+func (s *service) GetThumbnailURL(ctx context.Context, assetID string, w, h int) (string, error) {
+	if s.mode == "oss" {
+		kind, rawID := decodeAssetID(assetID)
+		client, err := s.clientForKind(kind)
+		if err != nil {
+			return "", err
+		}
+		// 如果 OSS 客户端支持 GetThumbnailURL，调用它
+		if thClient, ok := client.(interface {
+			GetThumbnailURL(ctx context.Context, fileID string, expire int, w, h int) (string, error)
+		}); ok {
+			return thClient.GetThumbnailURL(ctx, rawID, 3600, w, h)
+		}
+		// 回退到原图
 		return client.GetSignedURL(ctx, rawID, 3600)
 	}
 	return s.local.GetImageURL(ctx, assetID)

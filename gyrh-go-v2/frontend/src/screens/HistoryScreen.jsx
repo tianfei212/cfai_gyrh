@@ -15,7 +15,16 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       setLoading(true);
       const offset = (pageNumber - 1) * limit;
       const data = await fetchApi(`/api/v1/images?limit=${limit}&offset=${offset}`);
-      setHistory(data.images || []);
+      // 修复 bug：映射后端数据为前端需要的字段格式
+      const mappedHistory = (data.images || []).map(img => ({
+        id: img.id,
+        // 这里使用新的 thumbnail API，动态传入需要的分辨率
+        url: `/api/v1/images/thumbnail?url=${encodeURIComponent(`/api/v1/images/view?id=${img.id}`)}&w=400&h=400`,
+        rawUrl: `/api/v1/images/view?id=${img.id}`,
+        provider: img.style_transform,
+        created_at: img.created_at
+      }));
+      setHistory(mappedHistory);
       setTotal(data.total || 0);
     } catch (err) {
       console.error('Failed to fetch history:', err);
@@ -66,7 +75,7 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                 className="history-card"
                 style={{ backgroundImage: card.url ? `url(${card.url})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
                 title={`模型: ${card.provider || '未知'} | 时间: ${new Date(card.created_at).toLocaleString()}`}
-                onClick={() => window.open(card.url, '_blank')}
+                onClick={() => window.open(card.rawUrl || card.url, '_blank')}
               />
             ))
           )}

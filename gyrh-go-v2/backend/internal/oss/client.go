@@ -189,6 +189,40 @@ func (c *alOSSClient) GetSignedURL(ctx context.Context, fileID string, expire in
 	return result.URL, nil
 }
 
+func (c *alOSSClient) GetThumbnailURL(ctx context.Context, fileID string, expire int, w, h int) (string, error) {
+	reqURL := fmt.Sprintf("%s/view/%s?w=%d&h=%d", c.baseURL, url.PathEscape(fileID), w, h)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return "", err
+	}
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("获取 aliOSS 缩略图签名地址失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("获取 aliOSS 缩略图签名地址失败: %d %s", resp.StatusCode, string(raw))
+	}
+
+	var result struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("解析 aliOSS 缩略图签名地址失败: %w", err)
+	}
+	if result.URL == "" {
+		return "", fmt.Errorf("aliOSS 返回的缩略图签名地址为空")
+	}
+
+	return result.URL, nil
+}
+
 // DashScopeClient 用于本地模式下上传到阿里云百炼临时 OSS。
 type DashScopeClient struct {
 	apiKey         string
