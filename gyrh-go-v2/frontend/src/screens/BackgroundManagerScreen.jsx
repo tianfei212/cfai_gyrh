@@ -8,6 +8,7 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
+    name: item.name || '',
     wan_prompt_zh: item.wan_prompt_zh || '',
     wan_prompt: item.wan_prompt || '',
     gemini_prompt_zh: item.gemini_prompt_zh || '',
@@ -74,6 +75,17 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
           ) : (
             <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.5)' }}>无图片</div>
           )}
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <h4 style={{ margin: '0 0 10px 0' }}>图片名称</h4>
+          <input 
+            type="text"
+            value={formData.name} 
+            onChange={(e) => handleChange('name', e.target.value)}
+            disabled={!isEditing}
+            style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px' }}
+          />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>

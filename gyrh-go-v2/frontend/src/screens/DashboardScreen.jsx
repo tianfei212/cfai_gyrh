@@ -9,12 +9,17 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
   const [isDragging, setIsDragging] = useState(false);
   const [backgrounds, setBackgrounds] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const limit = 6;
 
   const fetchBackgrounds = async () => {
     try {
       setLoading(true);
-      const data = await fetchApi('/api/v1/background-prompts');
+      const offset = (page - 1) * limit;
+      const data = await fetchApi(`/api/v1/background-prompts?limit=${limit}&offset=${offset}`);
       setBackgrounds(data.items || data.prompts || []);
+      setTotal(data.total || 0);
     } catch (err) {
       console.error('Failed to fetch backgrounds:', err);
     } finally {
@@ -24,7 +29,19 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
 
   useEffect(() => {
     fetchBackgrounds();
-  }, []);
+  }, [page]);
+
+  const handlePrevPage = () => {
+    if (page > 1) {
+      setPage(page - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (page * limit < total) {
+      setPage(page + 1);
+    }
+  };
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -97,7 +114,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
       <section className="glass-section hero-workspace">
         <div className="section-topline">
           <h2>快速选择场景</h2>
-          <span>1 / 19</span>
+          <span>{page} / {Math.ceil(total / limit) || 1}</span>
         </div>
         <div 
           className={`upload-stage ${isDragging ? 'dragging' : ''} ${uploadedImage ? 'has-image' : ''}`}
@@ -193,10 +210,22 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
           )}
         </div>
         <div className="footer-slider">
-          <button className="slider-button" type="button">
+          <button 
+            className="slider-button" 
+            type="button" 
+            onClick={handlePrevPage} 
+            disabled={page === 1 || loading}
+            style={{ opacity: (page === 1 || loading) ? 0.5 : 1, cursor: (page === 1 || loading) ? 'not-allowed' : 'pointer' }}
+          >
             <ChevronLeftIcon />
           </button>
-          <button className="slider-button" type="button">
+          <button 
+            className="slider-button" 
+            type="button" 
+            onClick={handleNextPage} 
+            disabled={page * limit >= total || loading}
+            style={{ opacity: (page * limit >= total || loading) ? 0.5 : 1, cursor: (page * limit >= total || loading) ? 'not-allowed' : 'pointer' }}
+          >
             <ChevronRightIcon />
           </button>
         </div>
