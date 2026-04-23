@@ -69,14 +69,27 @@ func migrateTables(db *sql.DB) error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			path TEXT NOT NULL,
+			asset_id TEXT NOT NULL DEFAULT '',
 			is_upscale INTEGER NOT NULL DEFAULT 0,
 			style_transform TEXT NOT NULL DEFAULT '',
+			provider TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'succeeded',
+			background_prompt_id INTEGER NOT NULL DEFAULT 0,
+			image_width INTEGER NOT NULL DEFAULT 0,
+			image_height INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
 		return fmt.Errorf("创建 generated_images 表失败: %w", err)
 	}
+
+	_, _ = db.Exec("ALTER TABLE generated_images ADD COLUMN asset_id TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE generated_images ADD COLUMN provider TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE generated_images ADD COLUMN status TEXT NOT NULL DEFAULT 'succeeded'")
+	_, _ = db.Exec("ALTER TABLE generated_images ADD COLUMN background_prompt_id INTEGER NOT NULL DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE generated_images ADD COLUMN image_width INTEGER NOT NULL DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE generated_images ADD COLUMN image_height INTEGER NOT NULL DEFAULT 0")
 
 	// 创建 reference_images 表（参考图像记录）
 	_, err = db.Exec(`
@@ -119,6 +132,8 @@ func migrateTables(db *sql.DB) error {
 			wan_negative_prompt TEXT NOT NULL DEFAULT '',
 			image_asset_id TEXT NOT NULL DEFAULT '',
 			image_url TEXT NOT NULL DEFAULT '',
+			image_width INTEGER NOT NULL DEFAULT 0,
+			image_height INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
@@ -130,6 +145,8 @@ func migrateTables(db *sql.DB) error {
 	// 自动升级字段
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN image_asset_id TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN image_url TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN image_width INTEGER NOT NULL DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN image_height INTEGER NOT NULL DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gemini_prompt_zh TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gemini_negative_prompt_zh TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN wan_prompt_zh TEXT NOT NULL DEFAULT ''")

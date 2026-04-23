@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -53,9 +54,9 @@ func (s *LocalStorage) Save(ctx context.Context, data []byte, filename string) (
 
 // GetImageURL 获取用于前端查看的 URL（本地模式返回相对路径）
 func (s *LocalStorage) GetImageURL(ctx context.Context, assetID string) (string, error) {
-	// 本地模式返回相对路径，前端通过 /images/view?id=xxx 访问
+	// 本地模式返回相对路径，前端通过 /images/view?asset_id=xxx 访问
 	// 注意：这里只返回路径，完整的 URL 由前端服务拼接
-	viewURL := fmt.Sprintf("/images/view?id=%s", assetID)
+	viewURL := fmt.Sprintf("/api/v1/images/view?asset_id=%s", url.QueryEscape(assetID))
 	logger.Debug("获取本地图片 URL: assetID=%s, url=%s", assetID, viewURL)
 	return viewURL, nil
 }

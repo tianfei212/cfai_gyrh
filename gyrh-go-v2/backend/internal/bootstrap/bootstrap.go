@@ -177,7 +177,15 @@ func (s *Service) importGeneratedImages(ctx context.Context) error {
 			continue
 		}
 
-		if _, err := s.imageRepo.Create(entry.Name(), assetID, false, "imported"); err != nil {
+		if _, err := s.imageRepo.Create(db.GeneratedImageCreateInput{
+			Name:           entry.Name(),
+			Path:           assetID,
+			AssetID:        assetID,
+			IsUpscale:      false,
+			StyleTransform: "imported",
+			Provider:       "imported",
+			Status:         "imported",
+		}); err != nil {
 			logger.Error("写入导入图片数据库失败: %v", err)
 			continue
 		}

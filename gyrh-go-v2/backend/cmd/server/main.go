@@ -76,7 +76,7 @@ func main() {
 	llmPromptTemplateRepo := db.NewLLMPromptTemplateRepo(database)
 	backgroundPromptRepo := db.NewBackgroundPromptRepo(database)
 
-	if seedErr := qwen.EnsureDefaultTemplates(llmPromptTemplateRepo); seedErr != nil {
+	if seedErr := qwen.EnsureDefaultTemplates(llmPromptTemplateRepo, cfg.Skill.LocalPath); seedErr != nil {
 		logger.Fatal("初始化 Qwen 默认 Prompt 模板失败: %v", seedErr)
 	}
 
@@ -95,7 +95,7 @@ func main() {
 	}
 	bootstrapService.StartWatchers(ctx)
 
-	imageHandler := handler.NewImageHandler(imageRepo, storageService, llmService)
+	imageHandler := handler.NewImageHandler(imageRepo, backgroundPromptRepo, storageService, llmService)
 	referenceHandler := handler.NewReferenceHandler(referenceRepo, storageService)
 	skillHandler := handler.NewSkillHandler(skillRepo)
 	llmPromptTemplateHandler := handler.NewLLMPromptTemplateHandler(llmPromptTemplateRepo)

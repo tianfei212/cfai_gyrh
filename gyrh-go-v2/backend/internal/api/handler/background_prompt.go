@@ -1,10 +1,15 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +19,8 @@ import (
 	"gyrh-go-v2/backend/internal/logger"
 	"gyrh-go-v2/backend/internal/storage"
 	"gyrh-go-v2/backend/pkg/httpx"
+
+	_ "golang.org/x/image/webp"
 )
 
 // BackgroundPromptHandler 提供背景图提示词模板 CRUD 能力。
@@ -50,7 +57,7 @@ func (h *BackgroundPromptHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	result := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		result = append(result, toBackgroundPromptItem(item))
+		result = append(result, h.toBackgroundPromptItem(r.Context(), item))
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, httpx.Success(map[string]any{
@@ -75,7 +82,7 @@ func (h *BackgroundPromptHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, httpx.Success(toBackgroundPromptItem(item)))
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toBackgroundPromptItem(r.Context(), item)))
 }
 
 // Create 创建背景图提示词模板。
@@ -122,6 +129,8 @@ func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request)
 		req.WanNegativePromptZH,
 		"",
 		"",
+		0,
+		0,
 	)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "创建背景图提示词模板失败"))
@@ -134,7 +143,7 @@ func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, httpx.Success(toBackgroundPromptItem(item)))
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toBackgroundPromptItem(r.Context(), item)))
 }
 
 // Update 更新背景图提示词模板。
@@ -200,7 +209,7 @@ func (h *BackgroundPromptHandler) Update(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, httpx.Success(toBackgroundPromptItem(item)))
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toBackgroundPromptItem(r.Context(), item)))
 }
 
 // Delete 删除背景图提示词模板。
@@ -278,10 +287,15 @@ func (h *BackgroundPromptHandler) Import(w http.ResponseWriter, r *http.Request)
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "image 不是合法的 Base64"))
 		return
 	}
+	imageWidth, imageHeight, err := decodeImageSize(data)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "image 不是合法的图片数据"))
+		return
+	}
 
 	// 1. 保存图像到存储
 	ctx := r.Context()
-	logger.Info("开始导入背景图, 大小: %d bytes, 文件名: %s", len(data), req.Name)
+	logger.Info("开始导入背景图, 大小: %d bytes, 文件名: %s, width=%d, height=%d", len(data), req.Name, imageWidth, imageHeight)
 	assetID, err := h.storageService.SaveWithKind(ctx, data, fmt.Sprintf("imported_bg_%d.png", time.Now().UnixNano()), storage.SaveKindAsset)
 	if err != nil {
 		logger.Error("保存背景图到存储失败: %v", err)
@@ -329,7 +343,9 @@ func (h *BackgroundPromptHandler) Import(w http.ResponseWriter, r *http.Request)
 		result.WanPromptZH,
 		result.WanNegativePromptZH,
 		assetID,
-		imageURL,
+		"", // 不在数据库中保存临时 OSS URL，读取时动态获取
+		imageWidth,
+		imageHeight,
 	)
 	if err != nil {
 		logger.Error("保存背景图提示词到数据库失败: %v", err)
@@ -346,11 +362,7 @@ func (h *BackgroundPromptHandler) Import(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if encodeErr := json.NewEncoder(w).Encode(httpx.Success(toBackgroundPromptItem(item))); encodeErr != nil {
-		logger.Error("JSON 编码失败: %v", encodeErr)
-	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toBackgroundPromptItem(r.Context(), item)))
 }
 
 // SyncEnglish 根据中文提示词同步英文版本。
@@ -383,7 +395,14 @@ func (h *BackgroundPromptHandler) SyncEnglish(w http.ResponseWriter, r *http.Req
 	httpx.WriteJSON(w, http.StatusOK, httpx.Success(result))
 }
 
-func toBackgroundPromptItem(item *db.BackgroundPrompt) map[string]any {
+func (h *BackgroundPromptHandler) toBackgroundPromptItem(ctx context.Context, item *db.BackgroundPrompt) map[string]any {
+	imageURL := item.ImageURL
+	if item.ImageAssetID != "" && h.storageService != nil {
+		if url, err := h.storageService.GetImageURL(ctx, item.ImageAssetID); err == nil && url != "" {
+			imageURL = url
+		}
+	}
+
 	return map[string]any{
 		"id":                        item.ID,
 		"name":                      item.Name,
@@ -396,10 +415,20 @@ func toBackgroundPromptItem(item *db.BackgroundPrompt) map[string]any {
 		"wan_prompt_zh":             item.WanPromptZH,
 		"wan_negative_prompt_zh":    item.WanNegativePromptZH,
 		"image_asset_id":            item.ImageAssetID,
-		"image_url":                 item.ImageURL,
+		"image_url":                 imageURL,
+		"image_width":               item.ImageWidth,
+		"image_height":              item.ImageHeight,
 		"created_at":                item.CreatedAt.Format(time.RFC3339),
 		"updated_at":                item.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+func decodeImageSize(data []byte) (int, int, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0, err
+	}
+	return cfg.Width, cfg.Height, nil
 }
 
 func (h *BackgroundPromptHandler) resolveBackgroundAssetID(ctx context.Context, backgroundBase64 string, backgroundAssetID string) (string, func(), error) {

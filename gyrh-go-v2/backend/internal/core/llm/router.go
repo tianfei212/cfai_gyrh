@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -49,7 +47,16 @@ type ComposeParams struct {
 type ComposeResult struct {
 	ImageURL string
 	Base64   string
+	Status   string
 	Error    error
+}
+
+type resolvedPrompt struct {
+	Prompt         string
+	NegativePrompt string
+	BackgroundName string
+	ImageWidth     int
+	ImageHeight    int
 }
 
 // Service 定义大模型服务能力。
@@ -61,6 +68,7 @@ type service struct {
 	cfg                  *config.Config
 	skillRepo            *db.SkillRepo
 	backgroundPromptRepo *db.BackgroundPromptRepo
+	storageService       storage.StorageService
 	geminiHandler        *gemini.GeminiHandler
 	wanHandler           *wan.WanHandler
 }
@@ -73,10 +81,11 @@ func NewService(cfg *config.Config, storageService storage.StorageService, skill
 		cfg:                  cfg,
 		skillRepo:            skillRepo,
 		backgroundPromptRepo: backgroundPromptRepo,
+		storageService:       storageService,
 		geminiHandler:        gemini.NewGeminiHandler(storageService, cfg.Models.Gemini, requestTimeout),
 		wanHandler:           wan.NewWanHandler(storageService, cfg.Models.Wan, requestTimeout),
 	}
-	logger.Info("LLM 服务初始化完成")
+	logger.Info("图像生成服务初始化完成")
 	return svc, nil
 }
 
@@ -86,42 +95,46 @@ var ErrBackgroundPromptNotFound = errors.New("背景图提示词模板不存在"
 // Compose 执行图像融合。
 func (s *service) Compose(ctx context.Context, params ComposeParams) (*ComposeResult, error) {
 	provider := normalizeProvider(params.Provider)
-	prompt, err := s.buildPrompt(ctx, provider, params)
+	resolved, err := s.buildPrompt(ctx, provider, params)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Debug("========== LLM Compose Request ==========")
+	logger.Debug("========== Compose Request ==========")
 	logger.Debug("Provider: %s", provider)
 	logger.Debug("BackgroundPromptID: %d", params.BackgroundPromptID)
 	logger.Debug("Images Count: %d", len(params.Images))
-	logger.Debug("Prompt: \n%s", prompt)
-	logger.Debug("=========================================")
+	logger.Debug("Prompt: \n%s", resolved.Prompt)
+	logger.Debug("NegativePrompt: \n%s", resolved.NegativePrompt)
+	logger.Debug("=====================================")
 
 	switch provider {
 	case "wan":
 		result, err := s.wanHandler.Compose(ctx, &wan.ComposeParams{
-			CharacterImage:  firstImageByType(params.Images, ImageTypeCharacter),
-			BackgroundImage: firstImageByType(params.Images, ImageTypeBackground),
-			ReferenceImages: convertWanReferences(params.Images),
-		}, prompt)
+			CharacterImage:   firstImageByType(params.Images, ImageTypeCharacter),
+			BackgroundImage:  firstImageByType(params.Images, ImageTypeBackground),
+			ReferenceImages:  convertWanReferences(params.Images),
+			BackgroundWidth:  resolved.ImageWidth,
+			BackgroundHeight: resolved.ImageHeight,
+		}, resolved.Prompt, resolved.NegativePrompt)
 		if err != nil {
-			logger.Error("LLM Wan Compose Error: %v", err)
+			logger.Error("Wan Compose Error: %v", err)
 			return nil, err
 		}
-		
-		logger.Debug("========== LLM Wan Compose Response ==========")
+
+		logger.Debug("========== Wan Compose Response ==========")
 		if result.Error != nil {
 			logger.Debug("Result Error: %v", result.Error)
 		} else {
 			logger.Debug("Result ImageURL: %s", result.ImageURL)
 			logger.Debug("Result Base64 Length: %d", len(result.Base64))
 		}
-		logger.Debug("==============================================")
-		
+		logger.Debug("========================================")
+
 		return &ComposeResult{
 			ImageURL: result.ImageURL,
 			Base64:   result.Base64,
+			Status:   result.Status,
 			Error:    result.Error,
 		}, nil
 	default:
@@ -129,101 +142,84 @@ func (s *service) Compose(ctx context.Context, params ComposeParams) (*ComposeRe
 			CharacterImage:  firstImageByType(params.Images, ImageTypeCharacter),
 			BackgroundImage: firstImageByType(params.Images, ImageTypeBackground),
 			ReferenceImages: convertGeminiReferences(params.Images),
-		}, prompt)
+		}, composeGeminiPrompt(resolved.Prompt, resolved.NegativePrompt))
 		if err != nil {
-			logger.Error("LLM Gemini Compose Error: %v", err)
+			logger.Error("Gemini Compose Error: %v", err)
 			return nil, err
 		}
-		
-		logger.Debug("========== LLM Gemini Compose Response ==========")
+
+		logger.Debug("========== Gemini Compose Response ==========")
 		if result.Error != nil {
 			logger.Debug("Result Error: %v", result.Error)
 		} else {
 			logger.Debug("Result ImageURL: %s", result.ImageURL)
 			logger.Debug("Result Base64 Length: %d", len(result.Base64))
 		}
-		logger.Debug("=================================================")
-		
+		logger.Debug("============================================")
+
 		return &ComposeResult{
 			ImageURL: result.ImageURL,
 			Base64:   result.Base64,
+			Status:   "succeeded",
 			Error:    result.Error,
 		}, nil
 	}
 }
 
-// loadSkill 加载 Skill。
-func (s *service) loadSkill(_ context.Context, provider string) (string, error) {
-	if s.cfg.Skill.UseDatabase && s.skillRepo != nil {
-		skill, err := s.skillRepo.GetActive(provider)
-		if err == nil {
-			return skill.Content, nil
-		}
-		logger.Warn("从数据库加载 Skill 失败，回退本地文件: %v", err)
+// buildPrompt 根据背景模板和风格控制词生成最终 Prompt。
+func (s *service) buildPrompt(ctx context.Context, provider string, params ComposeParams) (*resolvedPrompt, error) {
+	resolved := &resolvedPrompt{
+		Prompt: strings.TrimSpace(params.StylePrompt),
 	}
 
-	return loadLocalSkill(s.cfg.Skill.LocalPath, provider)
-}
-
-// buildPrompt 根据 Skill、背景模板和风格控制词生成最终 Prompt。
-func (s *service) buildPrompt(ctx context.Context, provider string, params ComposeParams) (string, error) {
-	skill, err := s.loadSkill(ctx, provider)
-	if err != nil {
-		return "", err
-	}
-
-	var (
-		backgroundPrompt         string
-		backgroundNegativePrompt string
-	)
 	if hasImageType(params.Images, ImageTypeBackground) && params.BackgroundPromptID > 0 {
-		backgroundPrompt, backgroundNegativePrompt, err = s.loadBackgroundPrompt(ctx, provider, params.BackgroundPromptID)
+		item, err := s.loadBackgroundPromptItem(ctx, params.BackgroundPromptID)
 		if err != nil {
-			return "", err
+			return nil, err
+		}
+		resolved.BackgroundName = item.Name
+		resolved.ImageWidth = item.ImageWidth
+		resolved.ImageHeight = item.ImageHeight
+
+		switch provider {
+		case "wan":
+			resolved.Prompt = strings.TrimSpace(item.WanPrompt)
+			resolved.NegativePrompt = strings.TrimSpace(item.WanNegativePrompt)
+			logger.Debug("背景提示词来源: background_prompts.id=%d, field=wan_prompt/wan_negative_prompt, name=%s, width=%d, height=%d", params.BackgroundPromptID, item.Name, item.ImageWidth, item.ImageHeight)
+		default:
+			resolved.Prompt = strings.TrimSpace(item.GeminiPrompt)
+			resolved.NegativePrompt = strings.TrimSpace(item.GeminiNegativePrompt)
+			logger.Debug("背景提示词来源: background_prompts.id=%d, field=gemini_prompt/gemini_negative_prompt, name=%s, width=%d, height=%d", params.BackgroundPromptID, item.Name, item.ImageWidth, item.ImageHeight)
 		}
 	}
 
-	return composePromptDocument(skill, backgroundPrompt, backgroundNegativePrompt, params.StylePrompt), nil
+	return resolved, nil
 }
 
-// loadBackgroundPrompt 加载指定 provider 对应的背景图提示词模板。
-func (s *service) loadBackgroundPrompt(ctx context.Context, provider string, backgroundPromptID int64) (string, string, error) {
+// loadBackgroundPromptItem 加载背景图提示词模板。
+func (s *service) loadBackgroundPromptItem(ctx context.Context, backgroundPromptID int64) (*db.BackgroundPrompt, error) {
 	_ = ctx
 	if s.backgroundPromptRepo == nil {
-		return "", "", fmt.Errorf("背景图提示词仓库未初始化")
+		return nil, fmt.Errorf("背景图提示词仓库未初始化")
 	}
 
 	item, err := s.backgroundPromptRepo.GetByID(backgroundPromptID)
 	if err != nil {
-		return "", "", fmt.Errorf("%w: id=%d", ErrBackgroundPromptNotFound, backgroundPromptID)
+		return nil, fmt.Errorf("%w: id=%d", ErrBackgroundPromptNotFound, backgroundPromptID)
 	}
-
-	switch provider {
-	case "wan":
-		return strings.TrimSpace(item.WanPrompt), strings.TrimSpace(item.WanNegativePrompt), nil
-	default:
-		return strings.TrimSpace(item.GeminiPrompt), strings.TrimSpace(item.GeminiNegativePrompt), nil
-	}
+	return item, nil
 }
 
-// composePromptDocument 按固定结构组装最终 Prompt，避免多层重复拼接。
-func composePromptDocument(skill, backgroundPrompt, backgroundNegativePrompt, stylePrompt string) string {
-	sections := make([]string, 0, 4)
-
-	if skill = strings.TrimSpace(skill); skill != "" {
-		sections = append(sections, "[Skill]\n"+skill+"\n[/Skill]")
+func composeGeminiPrompt(prompt, negativePrompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	negativePrompt = strings.TrimSpace(negativePrompt)
+	if prompt == "" {
+		return ""
 	}
-	if backgroundPrompt = strings.TrimSpace(backgroundPrompt); backgroundPrompt != "" {
-		sections = append(sections, "[BackgroundPrompt]\n"+backgroundPrompt+"\n[/BackgroundPrompt]")
+	if negativePrompt == "" {
+		return prompt
 	}
-	if backgroundNegativePrompt = strings.TrimSpace(backgroundNegativePrompt); backgroundNegativePrompt != "" {
-		sections = append(sections, "[BackgroundNegativePrompt]\n请避免在背景中出现以下内容：\n"+backgroundNegativePrompt+"\n[/BackgroundNegativePrompt]")
-	}
-	if stylePrompt = strings.TrimSpace(stylePrompt); stylePrompt != "" {
-		sections = append(sections, "[StylePrompt]\n"+stylePrompt+"\n[/StylePrompt]")
-	}
-
-	return strings.Join(sections, "\n\n")
+	return prompt + "\n\nNegative prompt: " + negativePrompt
 }
 
 func normalizeProvider(provider string) string {
@@ -235,21 +231,6 @@ func normalizeProvider(provider string) string {
 	default:
 		return "google"
 	}
-}
-
-func loadLocalSkill(basePath, provider string) (string, error) {
-	candidates := []string{provider + ".md"}
-	if provider == "google" {
-		candidates = append(candidates, "gemini.md")
-	}
-	for _, name := range candidates {
-		path := filepath.Join(basePath, name)
-		data, err := os.ReadFile(path)
-		if err == nil {
-			return string(data), nil
-		}
-	}
-	return "", fmt.Errorf("读取本地 Skill 文件失败: provider=%s", provider)
 }
 
 func firstImageByType(inputs []ImageInput, imageType ImageType) string {

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
-import { SearchIcon, ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
+import { ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
 
-export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, model }) {
+export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, model, onPreview }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -15,14 +15,17 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       setLoading(true);
       const offset = (pageNumber - 1) * limit;
       const data = await fetchApi(`/api/v1/images?limit=${limit}&offset=${offset}`);
-      // 修复 bug：映射后端数据为前端需要的字段格式
       const mappedHistory = (data.images || []).map(img => ({
         id: img.id,
-        // 这里使用新的 thumbnail API，动态传入需要的分辨率
-        url: `/api/v1/images/thumbnail?url=${encodeURIComponent(`/api/v1/images/view?id=${img.id}`)}&w=400&h=400`,
-        rawUrl: `/api/v1/images/view?id=${img.id}`,
-        provider: img.style_transform,
-        created_at: img.created_at
+        url: img.asset_id
+          ? `/api/v1/images/thumbnail?asset_id=${encodeURIComponent(img.asset_id)}&w=400&h=400`
+          : (img.image_url ? `/api/v1/images/thumbnail?url=${encodeURIComponent(img.image_url)}&w=400&h=400` : ''),
+        rawUrl: img.image_url || `/api/v1/images/view?id=${img.id}`,
+        provider: img.provider || img.style_transform,
+        status: img.status,
+        created_at: img.created_at,
+        width: img.image_width || 0,
+        height: img.image_height || 0,
       }));
       setHistory(mappedHistory);
       setTotal(data.total || 0);
@@ -73,10 +76,25 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
               <div
                 key={card.id}
                 className="history-card"
-                style={{ backgroundImage: card.url ? `url(${card.url})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
-                title={`模型: ${card.provider || '未知'} | 时间: ${new Date(card.created_at).toLocaleString()}`}
-                onClick={() => window.open(card.rawUrl || card.url, '_blank')}
-              />
+                title={`生成时间: ${new Date(card.created_at).toLocaleString()}`}
+                onClick={() => onPreview(card.rawUrl || card.url)}
+                style={{ 
+                  cursor: 'pointer',
+                  aspectRatio: (card.width > 0 && card.height > 0) ? `${card.width} / ${card.height}` : 'auto'
+                }}
+              >
+                {card.url ? (
+                  <img 
+                    src={card.url} 
+                    alt={`生成的图片 ${card.id}`}
+                    style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 'inherit' }} 
+                  />
+                ) : (
+                  <div style={{ width: '100%', minHeight: '8.45rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)' }}>
+                    图片丢失
+                  </div>
+                )}
+              </div>
             ))
           )}
         </div>

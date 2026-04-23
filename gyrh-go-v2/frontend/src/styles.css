@@ -1130,14 +1130,15 @@ input {
 }
 
 .history-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.25rem;
+  column-count: 4;
+  column-gap: 0.6rem;
   margin-top: 0.45rem;
 }
 
 .history-card {
-  min-height: 8.45rem;
+  break-inside: avoid;
+  margin-bottom: 0.6rem;
+  display: block;
 }
 
 .history-footer {

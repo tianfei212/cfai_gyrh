@@ -20,21 +20,24 @@ import (
 	"gyrh-go-v2/backend/internal/db"
 	"gyrh-go-v2/backend/internal/logger"
 	"gyrh-go-v2/backend/internal/storage"
+	"gyrh-go-v2/backend/pkg/httpx"
 )
 
 // ImageHandler 图像处理器，提供图像的列表、下载、查看、上传、改写和删除功能
 type ImageHandler struct {
-	imageRepo      *db.ImageRepo          // 图像数据库仓库
-	storageService storage.StorageService // 存储服务
-	llmService     llm.Service            // 大模型服务
+	imageRepo            *db.ImageRepo            // 图像数据库仓库
+	backgroundPromptRepo *db.BackgroundPromptRepo // 背景提示词仓库
+	storageService       storage.StorageService   // 存储服务
+	llmService           llm.Service              // 大模型服务
 }
 
 // NewImageHandler 创建图像处理器实例
-func NewImageHandler(imageRepo *db.ImageRepo, storageService storage.StorageService, llmService llm.Service) *ImageHandler {
+func NewImageHandler(imageRepo *db.ImageRepo, backgroundPromptRepo *db.BackgroundPromptRepo, storageService storage.StorageService, llmService llm.Service) *ImageHandler {
 	return &ImageHandler{
-		imageRepo:      imageRepo,
-		storageService: storageService,
-		llmService:     llmService,
+		imageRepo:            imageRepo,
+		backgroundPromptRepo: backgroundPromptRepo,
+		storageService:       storageService,
+		llmService:           llmService,
 	}
 }
 
@@ -90,6 +93,24 @@ func (h *ImageHandler) List(ctx context.Context, w http.ResponseWriter, r *http.
 		total = int64(len(images))
 	}
 
+	for _, img := range images {
+		if img == nil {
+			continue
+		}
+		if img.AssetID == "" {
+			img.AssetID = img.Path
+		}
+		if img.AssetID == "" {
+			continue
+		}
+		imageURL, urlErr := h.storageService.GetImageURL(ctx, img.AssetID)
+		if urlErr != nil {
+			logger.Warn("生成历史图像访问 URL 失败: id=%d, asset_id=%s, err=%v", img.ID, img.AssetID, urlErr)
+			continue
+		}
+		img.ImageURL = imageURL
+	}
+
 	logger.Info("图像列表查询成功: count=%d, total=%d", len(images), total)
 
 	return writeJSON(w, http.StatusOK, ListResponse{
@@ -108,37 +129,22 @@ type DownloadRequest struct {
 // Download 图像下载
 // GET /images/download?id=xxx
 func (h *ImageHandler) Download(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	// 解析查询参数
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		return writeJSONError(w, http.StatusBadRequest, "缺少图像ID参数")
-	}
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	target, statusCode, err := h.resolveImageAccessTarget(r)
 	if err != nil {
-		return writeJSONError(w, http.StatusBadRequest, "无效的图像ID")
+		return writeJSONError(w, statusCode, err.Error())
 	}
-
-	logger.Info("下载图像: id=%d", id)
-
-	// 查询图像记录
-	img, err := h.imageRepo.GetByID(id)
-	if err != nil {
-		logger.Error("查询图像记录失败: id=%d, err=%v", id, err)
-		return writeJSONError(w, http.StatusNotFound, "图像不存在")
-	}
+	logger.Info("下载图像: asset_id=%s", target.AssetID)
 
 	// 获取图像数据
-	imageData, err := h.LoadFile(img.Path)
+	imageData, err := h.LoadFile(target.AssetID)
 	if err != nil {
-		logger.Error("读取图像文件失败: path=%s, err=%v", img.Path, err)
+		logger.Error("读取图像文件失败: asset_id=%s, err=%v", target.AssetID, err)
 		return writeJSONError(w, http.StatusInternalServerError, "读取图像文件失败")
 	}
 
 	// 设置响应头
-	filename := fmt.Sprintf("%s.png", img.Name)
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Header().Set("Content-Type", http.DetectContentType(imageData))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", target.Filename))
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
 
 	// 写入图像数据
@@ -147,37 +153,23 @@ func (h *ImageHandler) Download(ctx context.Context, w http.ResponseWriter, r *h
 		return err
 	}
 
-	logger.Info("图像下载成功: id=%d, size=%d", id, len(imageData))
+	logger.Info("图像下载成功: asset_id=%s, size=%d", target.AssetID, len(imageData))
 	return nil
 }
 
 // View 图像预览（支持 WebP 转换）
 // GET /images/view?id=xxx
 func (h *ImageHandler) View(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-	// 解析查询参数
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		return writeJSONError(w, http.StatusBadRequest, "缺少图像ID参数")
-	}
-
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	target, statusCode, err := h.resolveImageAccessTarget(r)
 	if err != nil {
-		return writeJSONError(w, http.StatusBadRequest, "无效的图像ID")
+		return writeJSONError(w, statusCode, err.Error())
 	}
-
-	logger.Debug("查看图像: id=%d", id)
-
-	// 查询图像记录
-	img, err := h.imageRepo.GetByID(id)
-	if err != nil {
-		logger.Error("查询图像记录失败: id=%d, err=%v", id, err)
-		return writeJSONError(w, http.StatusNotFound, "图像不存在")
-	}
+	logger.Debug("查看图像: asset_id=%s", target.AssetID)
 
 	// 获取图像数据
-	imageData, err := h.LoadFile(img.Path)
+	imageData, err := h.LoadFile(target.AssetID)
 	if err != nil {
-		logger.Error("读取图像文件失败: path=%s, err=%v", img.Path, err)
+		logger.Error("读取图像文件失败: asset_id=%s, err=%v", target.AssetID, err)
 		return writeJSONError(w, http.StatusInternalServerError, "读取图像文件失败")
 	}
 
@@ -195,7 +187,7 @@ func (h *ImageHandler) View(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if w.Header().Get("Content-Type") == "" {
-		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Content-Type", http.DetectContentType(imageData))
 	}
 
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
@@ -207,7 +199,7 @@ func (h *ImageHandler) View(ctx context.Context, w http.ResponseWriter, r *http.
 		return err
 	}
 
-	logger.Debug("图像查看成功: id=%d, size=%d", id, len(imageData))
+	logger.Debug("图像查看成功: asset_id=%s, size=%d", target.AssetID, len(imageData))
 	return nil
 }
 
@@ -368,7 +360,20 @@ func (h *ImageHandler) Upload(ctx context.Context, w http.ResponseWriter, r *htt
 	}
 
 	// 保存到数据库
-	imageID, err := h.imageRepo.Create(name, assetID, false, "")
+	imageWidth, imageHeight, err := decodeStoredImageSize(imageData)
+	if err != nil {
+		logger.Warn("解析上传图像尺寸失败: %v", err)
+	}
+
+	imageID, err := h.imageRepo.Create(db.GeneratedImageCreateInput{
+		Name:        name,
+		Path:        assetID,
+		AssetID:     assetID,
+		IsUpscale:   false,
+		Status:      "uploaded",
+		ImageWidth:  imageWidth,
+		ImageHeight: imageHeight,
+	})
 	if err != nil {
 		logger.Error("创建数据库记录失败: %v", err)
 		// 尝试删除已上传的文件
@@ -410,6 +415,7 @@ type RewriteResponse struct {
 	ID       int64  `json:"id"`              // 图像ID
 	AssetID  string `json:"asset_id"`        // 存储资源ID
 	ImageURL string `json:"image_url"`       // 访问URL
+	Status   string `json:"status"`          // 生成状态
 	Message  string `json:"message"`         // 消息
 	Error    string `json:"error,omitempty"` // 错误信息
 }
@@ -467,6 +473,10 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	if err != nil {
 		return writeJSONError(w, http.StatusBadRequest, err.Error())
 	}
+	if persistErr := h.persistBackgroundImage(req, inputs); persistErr != nil {
+		logger.Error("背景图入库失败: %v", persistErr)
+		return writeJSONError(w, http.StatusInternalServerError, "背景图入库失败")
+	}
 
 	if h.llmService == nil {
 		return writeJSONError(w, http.StatusInternalServerError, "LLM 服务未初始化")
@@ -508,7 +518,23 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 
 	// 保存到数据库
 	name := fmt.Sprintf("rewrite_%d", time.Now().Unix())
-	imageID, err := h.imageRepo.Create(name, assetID, false, req.Provider)
+	imageWidth, imageHeight, err := decodeStoredImageSize(resultData)
+	if err != nil {
+		logger.Warn("解析生成图像尺寸失败: %v", err)
+	}
+
+	imageID, err := h.imageRepo.Create(db.GeneratedImageCreateInput{
+		Name:               name,
+		Path:               assetID,
+		AssetID:            assetID,
+		IsUpscale:          false,
+		StyleTransform:     req.Provider,
+		Provider:           req.Provider,
+		Status:             normalizeRewriteStatus(result.Status),
+		BackgroundPromptID: req.BackgroundPromptID,
+		ImageWidth:         imageWidth,
+		ImageHeight:        imageHeight,
+	})
 	if err != nil {
 		logger.Error("创建数据库记录失败: %v", err)
 		_ = h.storageService.Delete(ctx, assetID)
@@ -522,6 +548,7 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 		ID:       imageID,
 		AssetID:  assetID,
 		ImageURL: imageURL,
+		Status:   normalizeRewriteStatus(result.Status),
 		Message:  "图像改写成功",
 	})
 }
@@ -579,6 +606,44 @@ func (h *ImageHandler) saveBase64Asset(ctx context.Context, raw, prefix string) 
 	return h.storageService.Save(ctx, data, filename)
 }
 
+func (h *ImageHandler) persistBackgroundImage(req RewriteRequest, inputs []llm.ImageInput) error {
+	if req.BackgroundPromptID <= 0 || strings.TrimSpace(req.Background) == "" || h.backgroundPromptRepo == nil {
+		return nil
+	}
+
+	backgroundAssetID := ""
+	for _, input := range inputs {
+		if input.Type == llm.ImageTypeBackground {
+			backgroundAssetID = input.AssetID
+			break
+		}
+	}
+	if backgroundAssetID == "" {
+		return nil
+	}
+
+	data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(req.Background))
+	if err != nil {
+		return fmt.Errorf("解码背景图失败: %w", err)
+	}
+	imageWidth, imageHeight, err := decodeImageSize(data)
+	if err != nil {
+		return fmt.Errorf("解析背景图尺寸失败: %w", err)
+	}
+
+	patch := db.BackgroundPromptPatch{
+		ImageAssetID: &backgroundAssetID,
+		ImageWidth:   &imageWidth,
+		ImageHeight:  &imageHeight,
+	}
+	if err := h.backgroundPromptRepo.Update(req.BackgroundPromptID, patch); err != nil {
+		return fmt.Errorf("更新背景图记录失败: %w", err)
+	}
+	logger.Info("背景图已入库: background_prompt_id=%d, asset_id=%s, size=%dx%d",
+		req.BackgroundPromptID, backgroundAssetID, imageWidth, imageHeight)
+	return nil
+}
+
 func (h *ImageHandler) resolveComposeResult(ctx context.Context, result *llm.ComposeResult) ([]byte, error) {
 	if result == nil {
 		return nil, fmt.Errorf("模型返回为空")
@@ -591,17 +656,30 @@ func (h *ImageHandler) resolveComposeResult(ctx context.Context, result *llm.Com
 		if err != nil {
 			return nil, err
 		}
-		resp, err := http.DefaultClient.Do(req)
+		req.Header.Set("Accept", "image/*")
+		resp, err := (&http.Client{Timeout: 2 * time.Minute}).Do(req)
 		if err != nil {
 			return nil, err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			return nil, fmt.Errorf("下载模型结果失败: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
 		return io.ReadAll(resp.Body)
 	}
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return nil, fmt.Errorf("模型未返回图像数据")
+}
+
+func decodeStoredImageSize(data []byte) (int, int, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0, err
+	}
+	return cfg.Width, cfg.Height, nil
 }
 
 func mapReferenceType(value string) (llm.ImageType, error) {
@@ -707,17 +785,60 @@ func convertToWebP(pngData []byte) ([]byte, error) {
 
 // writeJSON 写入 JSON 响应
 func writeJSON(w http.ResponseWriter, statusCode int, data any) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	return json.NewEncoder(w).Encode(data)
+	return httpx.WriteJSON(w, statusCode, httpx.Success(data))
 }
 
 // writeJSONError 写入 JSON 错误响应
 func writeJSONError(w http.ResponseWriter, statusCode int, message string) error {
-	return writeJSON(w, statusCode, map[string]any{
-		"success": false,
-		"error":   message,
-	})
+	return httpx.WriteJSON(w, statusCode, httpx.Error(1, message))
+}
+
+type imageAccessTarget struct {
+	AssetID  string
+	Filename string
+}
+
+func (h *ImageHandler) resolveImageAccessTarget(r *http.Request) (*imageAccessTarget, int, error) {
+	if assetID := strings.TrimSpace(r.URL.Query().Get("asset_id")); assetID != "" {
+		return &imageAccessTarget{
+			AssetID:  assetID,
+			Filename: filepath.Base(assetID),
+		}, 0, nil
+	}
+
+	idStr := strings.TrimSpace(r.URL.Query().Get("id"))
+	if idStr == "" {
+		return nil, http.StatusBadRequest, fmt.Errorf("缺少图像ID参数")
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return nil, http.StatusBadRequest, fmt.Errorf("无效的图像ID")
+	}
+
+	img, err := h.imageRepo.GetByID(id)
+	if err != nil {
+		logger.Error("查询图像记录失败: id=%d, err=%v", id, err)
+		return nil, http.StatusNotFound, fmt.Errorf("图像不存在")
+	}
+
+	filename := fmt.Sprintf("%s%s", img.Name, filepath.Ext(img.Path))
+	if filepath.Ext(filename) == "" {
+		filename += ".png"
+	}
+
+	return &imageAccessTarget{
+		AssetID:  img.Path,
+		Filename: filename,
+	}, 0, nil
+}
+
+func normalizeRewriteStatus(status string) string {
+	value := strings.TrimSpace(strings.ToLower(status))
+	if value == "" {
+		return "succeeded"
+	}
+	return value
 }
 
 // LoadFile 加载文件内容

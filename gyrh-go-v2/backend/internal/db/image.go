@@ -3,17 +3,39 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
 // GeneratedImage 生成图像数据结构
 type GeneratedImage struct {
-	ID             int64     `json:"id"`              // 图像ID
-	Name           string    `json:"name"`            // 图像名称
-	Path           string    `json:"path"`            // 图像存储路径
-	IsUpscale      bool      `json:"is_upscale"`      // 是否为放大后的图像
-	StyleTransform string    `json:"style_transform"` // 风格转换类型
-	CreatedAt      time.Time `json:"created_at"`       // 创建时间
+	ID                 int64     `json:"id"`                   // 图像ID
+	Name               string    `json:"name"`                 // 图像名称
+	Path               string    `json:"path"`                 // 兼容旧字段，等同存储路径
+	AssetID            string    `json:"asset_id"`             // 存储资源ID
+	IsUpscale          bool      `json:"is_upscale"`           // 是否为放大后的图像
+	StyleTransform     string    `json:"style_transform"`      // 兼容旧字段
+	Provider           string    `json:"provider"`             // 模型提供者
+	Status             string    `json:"status"`               // 生成状态
+	BackgroundPromptID int64     `json:"background_prompt_id"` // 关联的背景模板ID
+	ImageWidth         int       `json:"image_width"`          // 图片宽度
+	ImageHeight        int       `json:"image_height"`         // 图片高度
+	ImageURL           string    `json:"image_url,omitempty"`  // 动态生成的访问链接
+	CreatedAt          time.Time `json:"created_at"`           // 创建时间
+}
+
+// GeneratedImageCreateInput 创建生成图记录时使用的元数据。
+type GeneratedImageCreateInput struct {
+	Name               string
+	Path               string
+	AssetID            string
+	IsUpscale          bool
+	StyleTransform     string
+	Provider           string
+	Status             string
+	BackgroundPromptID int64
+	ImageWidth         int
+	ImageHeight        int
 }
 
 // ImageRepo 图像仓库，提供 generated_images 表的 CRUD 操作
@@ -32,11 +54,28 @@ func NewImageRepo(db *DB) *ImageRepo {
 // isUpscale 是否为放大后的图像
 // styleTransform 风格转换类型
 // 返回创建的图像ID和错误信息
-func (r *ImageRepo) Create(name, path string, isUpscale bool, styleTransform string) (int64, error) {
+func (r *ImageRepo) Create(input GeneratedImageCreateInput) (int64, error) {
+	if input.AssetID == "" {
+		input.AssetID = input.Path
+	}
+	if input.Path == "" {
+		input.Path = input.AssetID
+	}
+	if input.Provider == "" {
+		input.Provider = input.StyleTransform
+	}
+	if input.Status == "" {
+		input.Status = "succeeded"
+	}
+
 	result, err := r.db.Exec(`
-		INSERT INTO generated_images (name, path, is_upscale, style_transform, created_at)
-		VALUES (?, ?, ?, ?, ?)
-	`, name, path, isUpscale, styleTransform, time.Now())
+		INSERT INTO generated_images (
+			name, path, asset_id, is_upscale, style_transform,
+			provider, status, background_prompt_id, image_width, image_height, created_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, input.Name, input.Path, input.AssetID, input.IsUpscale, input.StyleTransform,
+		input.Provider, input.Status, input.BackgroundPromptID, input.ImageWidth, input.ImageHeight, time.Now())
 	if err != nil {
 		return 0, fmt.Errorf("插入图像记录失败: %w", err)
 	}
@@ -49,28 +88,29 @@ func (r *ImageRepo) Create(name, path string, isUpscale bool, styleTransform str
 	return id, nil
 }
 
+const generatedImageSelectColumns = `
+	id, name, path, asset_id, is_upscale, style_transform,
+	provider, status, background_prompt_id, image_width, image_height, created_at
+`
+
 // GetByID 根据ID获取图像记录
 // id 图像ID
 // 返回图像结构和错误信息
 func (r *ImageRepo) GetByID(id int64) (*GeneratedImage, error) {
 	row := r.db.QueryRow(`
-		SELECT id, name, path, is_upscale, style_transform, created_at
+		SELECT `+generatedImageSelectColumns+`
 		FROM generated_images
 		WHERE id = ?
 	`, id)
 
-	var img GeneratedImage
-	var isUpscaleInt int
-	err := row.Scan(&img.ID, &img.Name, &img.Path, &isUpscaleInt, &img.StyleTransform, &img.CreatedAt)
+	img, err := scanGeneratedImage(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("图像记录不存在: id=%d", id)
 		}
 		return nil, fmt.Errorf("查询图像记录失败: %w", err)
 	}
-	img.IsUpscale = isUpscaleInt == 1
-
-	return &img, nil
+	return img, nil
 }
 
 // GetByPath 根据路径获取图像记录
@@ -78,46 +118,39 @@ func (r *ImageRepo) GetByID(id int64) (*GeneratedImage, error) {
 // 返回图像结构和错误信息
 func (r *ImageRepo) GetByPath(path string) (*GeneratedImage, error) {
 	row := r.db.QueryRow(`
-		SELECT id, name, path, is_upscale, style_transform, created_at
+		SELECT `+generatedImageSelectColumns+`
 		FROM generated_images
 		WHERE path = ?
 	`, path)
 
-	var img GeneratedImage
-	var isUpscaleInt int
-	err := row.Scan(&img.ID, &img.Name, &img.Path, &isUpscaleInt, &img.StyleTransform, &img.CreatedAt)
+	img, err := scanGeneratedImage(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("图像记录不存在: path=%s", path)
 		}
 		return nil, fmt.Errorf("查询图像记录失败: %w", err)
 	}
-	img.IsUpscale = isUpscaleInt == 1
-
-	return &img, nil
+	return img, nil
 }
 
 // GetByName 根据名称获取图像记录。
 func (r *ImageRepo) GetByName(name string) (*GeneratedImage, error) {
 	row := r.db.QueryRow(`
-		SELECT id, name, path, is_upscale, style_transform, created_at
+		SELECT `+generatedImageSelectColumns+`
 		FROM generated_images
 		WHERE name = ?
 		ORDER BY created_at DESC
 		LIMIT 1
 	`, name)
 
-	var img GeneratedImage
-	var isUpscaleInt int
-	err := row.Scan(&img.ID, &img.Name, &img.Path, &isUpscaleInt, &img.StyleTransform, &img.CreatedAt)
+	img, err := scanGeneratedImage(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("图像记录不存在: name=%s", name)
 		}
 		return nil, fmt.Errorf("查询图像记录失败: %w", err)
 	}
-	img.IsUpscale = isUpscaleInt == 1
-	return &img, nil
+	return img, nil
 }
 
 // List 获取所有图像记录
@@ -126,19 +159,19 @@ func (r *ImageRepo) GetByName(name string) (*GeneratedImage, error) {
 // 返回图像列表和错误信息
 func (r *ImageRepo) List(limit, offset int) ([]*GeneratedImage, error) {
 	var query string
-	var args []interface{}
+	var args []any
 
 	if limit > 0 {
 		query = `
-			SELECT id, name, path, is_upscale, style_transform, created_at
+			SELECT ` + generatedImageSelectColumns + `
 			FROM generated_images
 			ORDER BY created_at DESC
 			LIMIT ? OFFSET ?
 		`
-		args = []interface{}{limit, offset}
+		args = []any{limit, offset}
 	} else {
 		query = `
-			SELECT id, name, path, is_upscale, style_transform, created_at
+			SELECT ` + generatedImageSelectColumns + `
 			FROM generated_images
 			ORDER BY created_at DESC
 		`
@@ -152,13 +185,11 @@ func (r *ImageRepo) List(limit, offset int) ([]*GeneratedImage, error) {
 
 	var images []*GeneratedImage
 	for rows.Next() {
-		var img GeneratedImage
-		var isUpscaleInt int
-		if err := rows.Scan(&img.ID, &img.Name, &img.Path, &isUpscaleInt, &img.StyleTransform, &img.CreatedAt); err != nil {
+		img, err := scanGeneratedImage(rows)
+		if err != nil {
 			return nil, fmt.Errorf("扫描图像记录失败: %w", err)
 		}
-		img.IsUpscale = isUpscaleInt == 1
-		images = append(images, &img)
+		images = append(images, img)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -174,25 +205,25 @@ func (r *ImageRepo) List(limit, offset int) ([]*GeneratedImage, error) {
 // 返回图像列表和错误信息
 func (r *ImageRepo) ListByStyleTransform(styleTransform string, limit int) ([]*GeneratedImage, error) {
 	var query string
-	var args []interface{}
+	var args []any
 
 	if limit > 0 {
 		query = `
-			SELECT id, name, path, is_upscale, style_transform, created_at
+			SELECT ` + generatedImageSelectColumns + `
 			FROM generated_images
 			WHERE style_transform = ?
 			ORDER BY created_at DESC
 			LIMIT ?
 		`
-		args = []interface{}{styleTransform, limit}
+		args = []any{styleTransform, limit}
 	} else {
 		query = `
-			SELECT id, name, path, is_upscale, style_transform, created_at
+			SELECT ` + generatedImageSelectColumns + `
 			FROM generated_images
 			WHERE style_transform = ?
 			ORDER BY created_at DESC
 		`
-		args = []interface{}{styleTransform}
+		args = []any{styleTransform}
 	}
 
 	rows, err := r.db.Query(query, args...)
@@ -203,13 +234,11 @@ func (r *ImageRepo) ListByStyleTransform(styleTransform string, limit int) ([]*G
 
 	var images []*GeneratedImage
 	for rows.Next() {
-		var img GeneratedImage
-		var isUpscaleInt int
-		if err := rows.Scan(&img.ID, &img.Name, &img.Path, &isUpscaleInt, &img.StyleTransform, &img.CreatedAt); err != nil {
+		img, err := scanGeneratedImage(rows)
+		if err != nil {
 			return nil, fmt.Errorf("扫描图像记录失败: %w", err)
 		}
-		img.IsUpscale = isUpscaleInt == 1
-		images = append(images, &img)
+		images = append(images, img)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -227,7 +256,7 @@ func (r *ImageRepo) ListByStyleTransform(styleTransform string, limit int) ([]*G
 func (r *ImageRepo) Update(id int64, name, path string) error {
 	// 构建动态更新SQL
 	setClauses := []string{}
-	args := []interface{}{}
+	args := []any{}
 
 	if name != "" {
 		setClauses = append(setClauses, "name = ?")
@@ -284,14 +313,47 @@ func (r *ImageRepo) Count() (int64, error) {
 	return count, nil
 }
 
+type generatedImageScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanGeneratedImage(scanner generatedImageScanner) (*GeneratedImage, error) {
+	var img GeneratedImage
+	var isUpscaleInt int
+	err := scanner.Scan(
+		&img.ID,
+		&img.Name,
+		&img.Path,
+		&img.AssetID,
+		&isUpscaleInt,
+		&img.StyleTransform,
+		&img.Provider,
+		&img.Status,
+		&img.BackgroundPromptID,
+		&img.ImageWidth,
+		&img.ImageHeight,
+		&img.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	img.IsUpscale = isUpscaleInt == 1
+	if img.AssetID == "" {
+		img.AssetID = img.Path
+	}
+	if img.Provider == "" {
+		img.Provider = img.StyleTransform
+	}
+	if img.Status == "" {
+		img.Status = "succeeded"
+	}
+	return &img, nil
+}
+
 // joinStrings 辅助函数，拼接字符串切片
 func joinStrings(strs []string, sep string) string {
 	if len(strs) == 0 {
 		return ""
 	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
+	return strings.Join(strs, sep)
 }

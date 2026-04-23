@@ -2,6 +2,7 @@ export const screens = [
   { key: 'dashboard', label: '主工作台' },
   { key: 'history', label: '历史记录' },
   { key: 'backgrounds', label: '背景管理' },
+  { key: 'skills', label: '技能管理' },
   { key: 'preview', label: '全屏预览', hideInNav: true },
   { key: 'capture', label: '摄像头拍摄', hideInNav: true },
   { key: 'rendering', label: '生成中', hideInNav: true },
