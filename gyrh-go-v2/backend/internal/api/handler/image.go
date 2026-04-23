@@ -27,15 +27,23 @@ import (
 type ImageHandler struct {
 	imageRepo            *db.ImageRepo            // 图像数据库仓库
 	backgroundPromptRepo *db.BackgroundPromptRepo // 背景提示词仓库
+	stylePromptRepo      *db.StylePromptRepo      // 风格提示词仓库
 	storageService       storage.StorageService   // 存储服务
 	llmService           llm.Service              // 大模型服务
 }
 
 // NewImageHandler 创建图像处理器实例
-func NewImageHandler(imageRepo *db.ImageRepo, backgroundPromptRepo *db.BackgroundPromptRepo, storageService storage.StorageService, llmService llm.Service) *ImageHandler {
+func NewImageHandler(
+	imageRepo *db.ImageRepo,
+	backgroundPromptRepo *db.BackgroundPromptRepo,
+	stylePromptRepo *db.StylePromptRepo,
+	storageService storage.StorageService,
+	llmService llm.Service,
+) *ImageHandler {
 	return &ImageHandler{
 		imageRepo:            imageRepo,
 		backgroundPromptRepo: backgroundPromptRepo,
+		stylePromptRepo:      stylePromptRepo,
 		storageService:       storageService,
 		llmService:           llmService,
 	}
@@ -401,10 +409,12 @@ type ReferenceItem struct {
 // RewriteRequest 图像改写请求参数
 type RewriteRequest struct {
 	Foreground         string          `json:"foreground"`           // 可选，Base64 编码的前景图
+	ForegroundAssetID  string          `json:"foreground_asset_id"`  // 可选，前景图的已存 Asset ID（优先使用）
 	Background         string          `json:"background"`           // 可选，Base64 编码的背景图
 	References         []ReferenceItem `json:"references"`           // 可选参考图列表
 	Provider           string          `json:"provider"`             // 模型提供者: google/wan，默认 google
-	StylePrompt        string          `json:"style_prompt"`         // 可选，仅用于风格转换的控制提示词
+	StylePrompt        string          `json:"style_prompt"`         // 可选，仅用于风格转换的控制提示词（如果提供了 style_prompt_id，则优先使用 id 查找）
+	StylePromptID      int64           `json:"style_prompt_id"`      // 可选，风格提示词 ID
 	LegacyPrompt       string          `json:"prompt"`               // 兼容旧字段，仅作为 style_prompt 别名读取
 	BackgroundPromptID int64           `json:"background_prompt_id"` // 可选，背景图提示词模板 ID
 }
@@ -438,6 +448,7 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	logger.Debug("========== 收到前端 Rewrite 请求 ==========")
 	logger.Debug("Provider: %s", req.Provider)
 	logger.Debug("BackgroundPromptID: %d", req.BackgroundPromptID)
+	logger.Debug("StylePromptID: %d", req.StylePromptID)
 	logger.Debug("StylePrompt: %s", req.StylePrompt)
 	logger.Debug("LegacyPrompt: %s", req.LegacyPrompt)
 	logger.Debug("Foreground Base64 Length: %d", len(req.Foreground))
@@ -453,7 +464,7 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 		return writeJSONError(w, http.StatusBadRequest, "不支持的模型提供者，仅支持 google 或 wan")
 	}
 
-	stylePrompt := req.effectiveStylePrompt()
+	stylePrompt := req.effectiveStylePrompt(h.stylePromptRepo)
 	hasBackground := strings.TrimSpace(req.Background) != ""
 
 	if hasBackground && req.BackgroundPromptID <= 0 {
@@ -553,7 +564,14 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	})
 }
 
-func (r RewriteRequest) effectiveStylePrompt() string {
+func (r RewriteRequest) effectiveStylePrompt(repo *db.StylePromptRepo) string {
+	if r.StylePromptID > 0 && repo != nil {
+		sp, err := repo.GetByID(r.StylePromptID)
+		if err == nil && sp != nil {
+			logger.Debug("使用风格提示词 ID: %d, 名称: %s, 提示词内容: %s", r.StylePromptID, sp.Name, sp.Prompt)
+			return sp.Prompt
+		}
+	}
 	if strings.TrimSpace(r.StylePrompt) != "" {
 		return strings.TrimSpace(r.StylePrompt)
 	}
@@ -563,7 +581,9 @@ func (r RewriteRequest) effectiveStylePrompt() string {
 func (h *ImageHandler) prepareLLMInputs(ctx context.Context, req RewriteRequest) ([]llm.ImageInput, error) {
 	inputs := make([]llm.ImageInput, 0, 2+len(req.References))
 
-	if req.Foreground != "" {
+	if req.ForegroundAssetID != "" {
+		inputs = append(inputs, llm.ImageInput{Type: llm.ImageTypeCharacter, AssetID: req.ForegroundAssetID})
+	} else if req.Foreground != "" {
 		assetID, err := h.saveBase64Asset(ctx, req.Foreground, "foreground")
 		if err != nil {
 			return nil, fmt.Errorf("前景图无效: %w", err)

@@ -5,6 +5,7 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { BackgroundManagerScreen } from './screens/BackgroundManagerScreen';
 import { SkillManagerScreen } from './screens/SkillManagerScreen';
+import { StyleManagerScreen } from './screens/StyleManagerScreen';
 import { PreviewScreen } from './screens/PreviewScreen';
 import { CaptureScreen } from './screens/CaptureScreen';
 import { RenderingScreen } from './screens/RenderingScreen';
@@ -40,6 +41,7 @@ function App() {
   const goHistory = () => changeScreen('history');
   const goBackgrounds = () => changeScreen('backgrounds');
   const goSkills = () => changeScreen('skills');
+  const goStyles = () => changeScreen('styles');
   const goCapture = (bg) => {
     setSelectedBg(bg);
     changeScreen('capture');
@@ -57,6 +59,7 @@ function App() {
     onHistory: goHistory,
     onBackgrounds: goBackgrounds,
     onSkills: goSkills,
+    onStyles: goStyles,
     onCapture: goCapture,
     onPreview: goPreview,
     onLogout: logout,
@@ -81,6 +84,7 @@ function App() {
         {screen === 'history' ? <HistoryScreen {...navHandlers} /> : null}
         {screen === 'backgrounds' ? <BackgroundManagerScreen {...navHandlers} /> : null}
         {screen === 'skills' ? <SkillManagerScreen {...navHandlers} /> : null}
+        {screen === 'styles' ? <StyleManagerScreen {...navHandlers} /> : null}
         {screen === 'preview' ? <PreviewScreen {...navHandlers} /> : null}
         {screen === 'capture' ? <CaptureScreen {...navHandlers} /> : null}
         {screen === 'rendering' ? <RenderingScreen {...navHandlers} /> : null}

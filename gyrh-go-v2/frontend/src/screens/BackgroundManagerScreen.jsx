@@ -250,7 +250,7 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
         </div>
         <div className="table-shell">
           <div className="table-header table-grid">
-            <span>编号</span>
+            <span>图片名称</span>
             <span>缩略图</span>
             <span>Wan 提示词</span>
             <span>Gemini 提示词</span>
@@ -263,7 +263,7 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
           ) : (
             backgrounds.map((row) => (
               <div className="table-row table-grid" key={row.id}>
-                <span>{row.id}</span>
+                <span title={row.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name || '-'}</span>
                 <div 
                   className="thumb-swatch" 
                   style={{ backgroundImage: row.image_url ? `url(/api/v1/images/thumbnail?url=${encodeURIComponent(row.image_url)}&w=150&h=150)` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }} 

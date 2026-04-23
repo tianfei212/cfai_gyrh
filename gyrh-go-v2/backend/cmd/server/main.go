@@ -75,6 +75,7 @@ func main() {
 	skillRepo := db.NewSkillRepo(database)
 	llmPromptTemplateRepo := db.NewLLMPromptTemplateRepo(database)
 	backgroundPromptRepo := db.NewBackgroundPromptRepo(database)
+	stylePromptRepo := db.NewStylePromptRepo(database)
 
 	if seedErr := qwen.EnsureDefaultTemplates(llmPromptTemplateRepo, cfg.Skill.LocalPath); seedErr != nil {
 		logger.Fatal("初始化 Qwen 默认 Prompt 模板失败: %v", seedErr)
@@ -95,14 +96,15 @@ func main() {
 	}
 	bootstrapService.StartWatchers(ctx)
 
-	imageHandler := handler.NewImageHandler(imageRepo, backgroundPromptRepo, storageService, llmService)
+	imageHandler := handler.NewImageHandler(imageRepo, backgroundPromptRepo, stylePromptRepo, storageService, llmService)
 	referenceHandler := handler.NewReferenceHandler(referenceRepo, storageService)
 	skillHandler := handler.NewSkillHandler(skillRepo)
 	llmPromptTemplateHandler := handler.NewLLMPromptTemplateHandler(llmPromptTemplateRepo)
 	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor)
+	stylePromptHandler := handler.NewStylePromptHandler(stylePromptRepo)
 
 	router := mux.NewRouter()
-	api.RegisterRoutes(router, imageHandler, referenceHandler, skillHandler, llmPromptTemplateHandler, backgroundPromptHandler, &middleware.AuthConfig{
+	api.RegisterRoutes(router, imageHandler, referenceHandler, skillHandler, llmPromptTemplateHandler, backgroundPromptHandler, stylePromptHandler, &middleware.AuthConfig{
 		PrivateKeyFetcher: func(publicKey string) string {
 			if configuredPublicKey := os.Getenv("GYRH_AUTH_PUBLIC_KEY"); configuredPublicKey != "" && configuredPublicKey == publicKey {
 				return os.Getenv("GYRH_AUTH_PRIVATE_KEY")

@@ -20,6 +20,7 @@ func RegisterRoutes(
 	skillHandler *handler.SkillHandler,
 	llmPromptTemplateHandler *handler.LLMPromptTemplateHandler,
 	backgroundPromptHandler *handler.BackgroundPromptHandler,
+	stylePromptHandler *handler.StylePromptHandler,
 	authConfig *middleware.AuthConfig,
 ) {
 	router.Use(middleware.Logger())
@@ -28,6 +29,7 @@ func RegisterRoutes(
 	api := router.PathPrefix("/api/v1").Subrouter()
 	api.HandleFunc("/health", healthCheck).Methods(http.MethodGet)
 	api.HandleFunc("/skills/active", skillHandler.GetActive).Methods(http.MethodGet)
+	api.HandleFunc("/style-prompts", stylePromptHandler.List).Methods(http.MethodGet)
 
 	// 公开的图片资源访问接口，不需要 Header 鉴权，因为常用于 <img> 标签
 	api.Handle("/images/thumbnail", adaptErr(imageHandler.Thumbnail)).Methods(http.MethodGet)
@@ -68,6 +70,11 @@ func RegisterRoutes(
 	protected.HandleFunc("/background-prompts", backgroundPromptHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Delete).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/style-prompts/{id}", stylePromptHandler.Get).Methods(http.MethodGet)
+	protected.HandleFunc("/style-prompts", stylePromptHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/style-prompts/{id}", stylePromptHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/style-prompts/{id}", stylePromptHandler.Delete).Methods(http.MethodDelete)
 }
 
 func adaptErr(fn func(context.Context, http.ResponseWriter, *http.Request) error) http.Handler {

@@ -168,6 +168,22 @@ func migrateTables(db *sql.DB) error {
 		return fmt.Errorf("创建 llm_prompt_templates 表失败: %w", err)
 	}
 
+	// 创建 style_prompts 表（风格转换提示词模板）
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS style_prompts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			negative_prompt TEXT NOT NULL DEFAULT '',
+			is_active INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 style_prompts 表失败: %w", err)
+	}
+
 	// 创建索引以提高查询性能
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_generated_images_created_at ON generated_images(created_at)`,
@@ -178,6 +194,8 @@ func migrateTables(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_background_prompts_updated_at ON background_prompts(updated_at)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_prompt_templates_key ON llm_prompt_templates(template_key)`,
 		`CREATE INDEX IF NOT EXISTS idx_llm_prompt_templates_updated_at ON llm_prompt_templates(updated_at)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_style_prompts_name ON style_prompts(name)`,
+		`CREATE INDEX IF NOT EXISTS idx_style_prompts_is_active ON style_prompts(is_active)`,
 	}
 
 	for _, idx := range indexes {

@@ -1,13 +1,14 @@
 export const screens = [
-  { key: 'dashboard', label: '主工作台' },
-  { key: 'history', label: '历史记录' },
-  { key: 'backgrounds', label: '背景管理' },
-  { key: 'skills', label: '技能管理' },
-  { key: 'preview', label: '全屏预览', hideInNav: true },
-  { key: 'capture', label: '摄像头拍摄', hideInNav: true },
-  { key: 'rendering', label: '生成中', hideInNav: true },
-  { key: 'login', label: '登录', hideInNav: true },
-  { key: 'logout', label: '退出确认', hideInNav: true },
+  { key: 'dashboard', label: '工作台', icon: 'HomeIcon' },
+  { key: 'history', label: '生成记录', icon: 'StackIcon' },
+  { key: 'backgrounds', label: '背景库', icon: 'ImageIcon' },
+  { key: 'skills', label: 'SKILL 管理', icon: 'SettingsIcon' },
+  { key: 'styles', label: '风格转换配置', icon: 'SettingsIcon' },
+  { key: 'preview', label: '大屏预览', icon: 'ImageIcon', hideInNav: true },
+  { key: 'capture', label: '捕捉', icon: 'CameraIcon', hideInNav: true },
+  { key: 'rendering', label: '渲染中', icon: 'ClockIcon', hideInNav: true },
+  { key: 'login', label: '系统登录', icon: 'ExitIcon', hideInNav: true },
+  { key: 'logout', label: '退出', icon: 'ExitIcon' }
 ];
 
 export const galleryCards = [
