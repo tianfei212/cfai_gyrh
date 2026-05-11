@@ -44,7 +44,7 @@
   - `gyrh-go-v2/frontend/src/screens/PreviewScreen.jsx`
   - `gyrh-go-v2/frontend/src/utils/imageThumbs.js`
   - `gyrh-go-v2/frontend/src/utils/imageThumbs.test.js`
-- commit hash：未提交，提交后补充
+- commit hash：`3462ad2`
 
 ## 2026-05-11 21:30 UTC+8
 
