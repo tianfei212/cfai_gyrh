@@ -41,7 +41,7 @@
   - `gyrh-go-v2/frontend/src/styles.css`
   - `gyrh-go-v2/frontend/src/utils/cameraZoom.js`
   - `gyrh-go-v2/frontend/src/utils/cameraZoom.test.js`
-- commit hash：未提交，提交后补充
+- commit hash：`60af51d`
 
 ## 2026-05-11 21:56 UTC+8
 
