@@ -3,14 +3,21 @@ import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 import { SimpleFrame } from '../components/Layout';
 import { CameraIcon, ClockIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
+import {
+  getCameraScaleFromZoomOffset,
+  getCenteredZoomCrop,
+  getHorizontalMirrorTransform,
+} from '../utils/cameraZoom';
 
 export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, model, selectedBg, onPreview }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [opacity, setOpacity] = useState(0.8);
+  const [zoomOffset, setZoomOffset] = useState(0);
   const [isCapturing, setIsCapturing] = useState(false);
   const [capturedOriginal, setCapturedOriginal] = useState(null);
   const selfieSegmentationRef = useRef(null);
+  const cameraScale = getCameraScaleFromZoomOffset(zoomOffset);
 
   useEffect(() => {
     let stream = null;
@@ -108,14 +115,29 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     
     setIsCapturing(true);
     const videoElement = videoRef.current;
+    const frameWidth = videoElement.videoWidth || 1280;
+    const frameHeight = videoElement.videoHeight || 720;
     
-    // Capture original frame immediately
-    const origCanvas = document.createElement('canvas');
-    origCanvas.width = videoElement.videoWidth || 1280;
-    origCanvas.height = videoElement.videoHeight || 720;
-    const origCtx = origCanvas.getContext('2d');
-    origCtx.drawImage(videoElement, 0, 0, origCanvas.width, origCanvas.height);
-    const originalDataUrl = origCanvas.toDataURL('image/jpeg', 0.9);
+    const zoomedCanvas = document.createElement('canvas');
+    zoomedCanvas.width = frameWidth;
+    zoomedCanvas.height = frameHeight;
+    const zoomedCtx = zoomedCanvas.getContext('2d');
+    const crop = getCenteredZoomCrop({ width: frameWidth, height: frameHeight, zoom: cameraScale });
+    const mirror = getHorizontalMirrorTransform(frameWidth);
+    zoomedCtx.translate(mirror.translateX, 0);
+    zoomedCtx.scale(mirror.scaleX, 1);
+    zoomedCtx.drawImage(
+      videoElement,
+      crop.sx,
+      crop.sy,
+      crop.sw,
+      crop.sh,
+      crop.dx,
+      crop.dy,
+      crop.dw,
+      crop.dh,
+    );
+    const originalDataUrl = zoomedCanvas.toDataURL('image/jpeg', 0.9);
     
     selfieSegmentationRef.current.onResults(async (results) => {
       const canvas = document.createElement('canvas');
@@ -142,7 +164,7 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       setIsCapturing(false);
     });
 
-    await selfieSegmentationRef.current.send({ image: videoElement });
+    await selfieSegmentationRef.current.send({ image: zoomedCanvas });
   };
 
   const handleDiscard = () => {
@@ -264,9 +286,28 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                 height: '100%',
                 objectFit: 'cover',
                 opacity: opacity,
+                transform: `scaleX(-1) scale(${cameraScale})`,
+                transformOrigin: 'center center',
                 display: capturedOriginal ? 'none' : 'block'
               }}
             />
+
+            <div className="zoom-slider-wrapper" style={{ zIndex: 4 }}>
+              <span className="slider-label">人物大小</span>
+              <div className="slider-track">
+                <input
+                  type="range"
+                  min="-1"
+                  max="1.5"
+                  step="0.05"
+                  value={zoomOffset}
+                  onChange={(e) => setZoomOffset(parseFloat(e.target.value))}
+                  className="vertical-slider"
+                  aria-label="人物大小"
+                />
+              </div>
+              <span className="slider-value">{zoomOffset > 0 ? '+' : ''}{zoomOffset.toFixed(1)}x</span>
+            </div>
 
             <div className="opacity-slider-wrapper" style={{ zIndex: 4 }}>
               <span className="slider-label">透明度</span>

@@ -528,9 +528,9 @@ input {
   object-fit: cover;
 }
 
-.opacity-slider-wrapper {
+.opacity-slider-wrapper,
+.zoom-slider-wrapper {
   position: absolute;
-  right: 1.5rem;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -543,6 +543,14 @@ input {
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 999px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.opacity-slider-wrapper {
+  right: 1.5rem;
+}
+
+.zoom-slider-wrapper {
+  left: 1.5rem;
 }
 
 .slider-label {

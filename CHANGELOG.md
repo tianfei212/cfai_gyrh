@@ -28,6 +28,21 @@
 - commit hash：未提交，提交后补充
 ```
 
+## 2026-05-11 22:12 UTC+8
+
+- 日期：2026-05-11
+- 更新时间：22:12 UTC+8
+- 分支：feature/frontend-addition
+- 目的：为摄像头拍摄页新增左侧人物大小数字变焦控制，支持从 -1.0x 缩小到 +1.5x 放大的偏移式调节，并完成摄像头左右镜像，确保实时预览、拍摄原图与 MediaPipe 抠像输入使用一致的中心缩放和镜像效果。
+- 执行者：GPT-5.5（GPT-5.5，OpenAI）
+- 文件清单：
+  - `CHANGELOG.md`
+  - `gyrh-go-v2/frontend/src/screens/CaptureScreen.jsx`
+  - `gyrh-go-v2/frontend/src/styles.css`
+  - `gyrh-go-v2/frontend/src/utils/cameraZoom.js`
+  - `gyrh-go-v2/frontend/src/utils/cameraZoom.test.js`
+- commit hash：未提交，提交后补充
+
 ## 2026-05-11 21:56 UTC+8
 
 - 日期：2026-05-11
