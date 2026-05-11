@@ -11,6 +11,19 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
   const [originalImage, setOriginalImage] = useState(capturedImage);
   const [currentImage, setCurrentImage] = useState(capturedImage);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullscreen(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
   // Fetch active style prompts from the backend
   useEffect(() => {
     const fetchStyles = async () => {
@@ -120,6 +133,31 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       : imgSrc;
   };
 
+  const openFullscreenPreview = async () => {
+    if (!currentImage) return;
+    setIsFullscreen(true);
+
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (err) {
+      console.warn('Native fullscreen failed, falling back to overlay:', err);
+    }
+  };
+
+  const closeFullscreenPreview = async () => {
+    setIsFullscreen(false);
+
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch (err) {
+      console.warn('Exit fullscreen failed:', err);
+    }
+  };
+
   return (
     <SimpleFrame 
       title="AI Smart Portrait · 全屏预览与风格转换"
@@ -166,7 +204,7 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                   alt="Style Transferred Portrait" 
                   className="full-preview-img"
                   style={{ cursor: 'zoom-in' }}
-                  onClick={() => setIsFullscreen(true)}
+                  onClick={openFullscreenPreview}
                 />
                 <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', color: '#fff', fontSize: '12px' }}>
                   效果图
@@ -260,18 +298,71 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       {isFullscreen && (
         <div 
           className="fullscreen-overlay" 
-          onClick={() => setIsFullscreen(false)} 
+          onClick={closeFullscreenPreview} 
           style={{
-            position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.9)', 
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out',
-            backdropFilter: 'blur(10px)'
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: '#000',
+            display: 'flex',
+            alignItems: 'stretch',
+            justifyContent: 'stretch',
+            cursor: 'zoom-out',
+            overflow: 'hidden'
           }}
         >
+          <button
+            type="button"
+            aria-label="关闭全屏预览"
+            onClick={(event) => {
+              event.stopPropagation();
+              closeFullscreenPreview();
+            }}
+            style={{
+              position: 'fixed',
+              top: '18px',
+              right: '18px',
+              zIndex: 10000,
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.22)',
+              background: 'rgba(255,255,255,0.12)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              backdropFilter: 'blur(12px)'
+            }}
+          >
+            <XIcon />
+          </button>
           <img 
             src={getDisplayImageSrc(currentImage)} 
             alt="Fullscreen" 
-            style={{ maxWidth: '95vw', maxHeight: '95vh', objectFit: 'contain', borderRadius: '8px' }} 
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: '100vw',
+              height: '100vh',
+              objectFit: 'cover',
+              display: 'block'
+            }} 
           />
+          <div style={{
+            position: 'fixed',
+            left: '24px',
+            bottom: '20px',
+            color: 'rgba(255,255,255,0.74)',
+            background: 'rgba(0,0,0,0.35)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: '999px',
+            padding: '8px 12px',
+            fontSize: '13px',
+            backdropFilter: 'blur(12px)'
+          }}>
+            Esc 或点击空白区域退出全屏
+          </div>
         </div>
       )}
 

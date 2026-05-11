@@ -213,8 +213,11 @@ func (s *service) loadBackgroundPromptItem(ctx context.Context, backgroundPrompt
 func composeGeminiPrompt(prompt, negativePrompt string) string {
 	prompt = strings.TrimSpace(prompt)
 	negativePrompt = strings.TrimSpace(negativePrompt)
+	outputRequirement := "Output requirements: generate a 16:9 landscape image at 2K resolution. Preserve a cinematic wide composition and do not output square or portrait framing."
 	if prompt == "" {
-		return ""
+		prompt = outputRequirement
+	} else {
+		prompt = prompt + "\n\n" + outputRequirement
 	}
 	if negativePrompt == "" {
 		return prompt

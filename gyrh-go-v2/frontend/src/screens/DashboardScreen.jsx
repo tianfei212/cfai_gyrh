@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { WorkbenchLayout, HeaderIcon, HistorySidebar } from '../components/Layout';
 import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
+import { buildImageThumbnailUrl } from '../utils/imageThumbs';
 
 export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, model }) {
   const fileInputRef = useRef(null);
@@ -201,7 +202,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
                 key={card.id}
                 className="gallery-card"
                 onClick={handleUseImage(card)}
-                style={{ cursor: 'pointer', backgroundImage: card.image_url ? `url(/api/v1/images/thumbnail?url=${encodeURIComponent(card.image_url)}&w=400&h=400)` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
+                style={{ cursor: 'pointer', backgroundImage: card.image_url ? `url(${buildImageThumbnailUrl({ imageUrl: card.image_url })})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
                 title={model === 'W' ? card.wan_prompt : card.gemini_prompt}
               >
                 <span style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 8px', borderRadius: '4px' }}>{card.name || `背景 ${card.id}`}</span>

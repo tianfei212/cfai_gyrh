@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
 import { ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
+import { buildImageThumbnailUrl } from '../utils/imageThumbs';
 
 export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, model, onPreview }) {
   const [history, setHistory] = useState([]);
@@ -17,9 +18,7 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       const data = await fetchApi(`/api/v1/images?limit=${limit}&offset=${offset}`);
       const mappedHistory = (data.images || []).map(img => ({
         id: img.id,
-        url: img.asset_id
-          ? `/api/v1/images/thumbnail?asset_id=${encodeURIComponent(img.asset_id)}&w=400&h=400`
-          : (img.image_url ? `/api/v1/images/thumbnail?url=${encodeURIComponent(img.image_url)}&w=400&h=400` : ''),
+        url: buildImageThumbnailUrl({ assetId: img.asset_id, imageUrl: img.image_url }),
         rawUrl: img.image_url || `/api/v1/images/view?id=${img.id}`,
         provider: img.provider || img.style_transform,
         status: img.status,
@@ -80,14 +79,14 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                 onClick={() => onPreview(card.rawUrl || card.url)}
                 style={{ 
                   cursor: 'pointer',
-                  aspectRatio: (card.width > 0 && card.height > 0) ? `${card.width} / ${card.height}` : 'auto'
+                  aspectRatio: '16 / 9'
                 }}
               >
                 {card.url ? (
                   <img 
                     src={card.url} 
                     alt={`生成的图片 ${card.id}`}
-                    style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 'inherit' }} 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: 'inherit' }} 
                   />
                 ) : (
                   <div style={{ width: '100%', minHeight: '8.45rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)' }}>
