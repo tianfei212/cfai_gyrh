@@ -27,3 +27,10 @@ export function buildHistoryPreviewPayload(record) {
     mode: 'single',
   };
 }
+
+export function getHistoryPageAfterDeletion({ page = 1, total = 0, deletedCount = 0, limit = 12 } = {}) {
+  const remainingTotal = Math.max(0, total - deletedCount);
+  const totalPages = Math.max(1, Math.ceil(remainingTotal / limit));
+
+  return Math.min(Math.max(1, page), totalPages);
+}

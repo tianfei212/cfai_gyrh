@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildHistoryPreviewPayload,
   buildHistoryTitle,
+  getHistoryPageAfterDeletion,
   mapGeneratedImagesToHistoryRecords,
 } from './historyRecords.js';
 
@@ -58,4 +59,10 @@ test('builds single-image preview payload from a history record', () => {
       mode: 'single',
     },
   );
+});
+
+test('calculates the page to refresh after selected records are deleted', () => {
+  assert.equal(getHistoryPageAfterDeletion({ page: 2, total: 13, deletedCount: 1, limit: 12 }), 1);
+  assert.equal(getHistoryPageAfterDeletion({ page: 2, total: 14, deletedCount: 1, limit: 12 }), 2);
+  assert.equal(getHistoryPageAfterDeletion({ page: 1, total: 3, deletedCount: 3, limit: 12 }), 1);
 });

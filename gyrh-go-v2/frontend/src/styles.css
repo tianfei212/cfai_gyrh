@@ -344,6 +344,23 @@ input {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 60%, rgba(0, 0, 0, 0.1) 100%);
 }
 
+.tiny-chip.danger {
+  background: rgba(185, 54, 63, 0.58);
+  border-color: rgba(255, 181, 188, 0.35);
+}
+
+.tiny-chip:disabled,
+.slider-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+  transform: none;
+}
+
+.tiny-chip:disabled:hover,
+.slider-button:disabled:hover {
+  transform: none;
+}
+
 .auth-submit {
   width: 100%;
   min-height: 3.45rem;
@@ -1174,6 +1191,62 @@ input {
   break-inside: avoid;
   margin-bottom: 0.6rem;
   display: block;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.history-card:hover {
+  transform: translateY(-1px);
+}
+
+.history-card.selected {
+  border-color: rgba(121, 178, 255, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(121, 178, 255, 0.24),
+    0 16px 36px rgba(40, 102, 190, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.history-card.selected::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(121, 178, 255, 0.18), transparent 42%);
+}
+
+.history-select-button {
+  position: absolute;
+  z-index: 2;
+  top: 0.55rem;
+  left: 0.55rem;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(218, 230, 255, 0.64);
+  background: rgba(7, 15, 30, 0.42);
+  backdrop-filter: blur(12px);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.history-select-button span {
+  width: 0.64rem;
+  height: 0.64rem;
+  border-radius: inherit;
+  background: transparent;
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.history-select-button[aria-pressed="true"] {
+  border-color: rgba(161, 204, 255, 0.96);
+  background: rgba(59, 130, 246, 0.5);
+}
+
+.history-select-button[aria-pressed="true"] span {
+  background: #f7fbff;
+  box-shadow: 0 0 14px rgba(142, 198, 255, 0.85);
 }
 
 .history-footer {

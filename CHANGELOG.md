@@ -28,6 +28,21 @@
 - commit hash：未提交，提交后补充
 ```
 
+## 2026-05-11 23:36 UTC+8
+
+- 日期：2026-05-11
+- 更新时间：23:36 UTC+8
+- 分支：feature/frontend-addition
+- 目的：为独立历史记录页新增图片多选与批量删除能力，在每张历史图片上提供玻璃态选择框，并在刷新按钮旁新增带二次确认的删除按钮，删除后自动刷新并处理页码回退。
+- 执行者：GPT-5.5（GPT-5.5，OpenAI）
+- 文件清单：
+  - `CHANGELOG.md`
+  - `gyrh-go-v2/frontend/src/screens/HistoryScreen.jsx`
+  - `gyrh-go-v2/frontend/src/styles.css`
+  - `gyrh-go-v2/frontend/src/utils/historyRecords.js`
+  - `gyrh-go-v2/frontend/src/utils/historyRecords.test.js`
+- commit hash：未提交，提交后补充
+
 ## 2026-05-11 22:58 UTC+8
 
 - 日期：2026-05-11
