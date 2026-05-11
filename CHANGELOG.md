@@ -47,7 +47,7 @@
   - `gyrh-go-v2/frontend/src/utils/historyRecords.test.js`
   - `gyrh-go-v2/frontend/src/utils/previewSelection.js`
   - `gyrh-go-v2/frontend/src/utils/previewSelection.test.js`
-- commit hash：未提交，提交后补充
+- commit hash：`eea7e73`
 
 ## 2026-05-11 22:12 UTC+8
 
