@@ -90,14 +90,16 @@ type Content struct {
 
 // Part 内容部分
 type Part struct {
-	Text      string     `json:"text,omitempty"`
-	ImageData *ImageData `json:"imageData,omitempty"`
+	Text            string      `json:"text,omitempty"`
+	InlineData      *InlineData `json:"inline_data,omitempty"`
+	InlineDataCamel *InlineData `json:"inlineData,omitempty"`
 }
 
-// ImageData 图像数据
-type ImageData struct {
-	MimeType string `json:"mimeType"`
-	Data     string `json:"data"`
+// InlineData Gemini inline image data.
+type InlineData struct {
+	MimeType      string `json:"mime_type,omitempty"`
+	MimeTypeCamel string `json:"mimeType,omitempty"`
+	Data          string `json:"data"`
 }
 
 // GeminiResponse Gemini API 响应结构
@@ -218,7 +220,7 @@ func (h *GeminiHandler) prepareImagePart(ctx context.Context, assetID string, mi
 			logger.Warn("读取 Gemini 远端图片失败，回退到 Base64: assetID=%s, error=%v", assetID, readErr)
 		default:
 			return &Part{
-				ImageData: &ImageData{
+				InlineData: &InlineData{
 					MimeType: mimeType,
 					Data:     source,
 				},
@@ -261,7 +263,7 @@ func (h *GeminiHandler) fetchRemoteImage(ctx context.Context, sourceURL string) 
 
 func encodeImagePart(imageData []byte, mimeType string) *Part {
 	return &Part{
-		ImageData: &ImageData{
+		InlineData: &InlineData{
 			MimeType: mimeType,
 			Data:     base64.StdEncoding.EncodeToString(imageData),
 		},
@@ -321,11 +323,17 @@ func (h *GeminiHandler) parseResponse(resp *GeminiResponse) (*ComposeResult, err
 
 	// 查找图像数据
 	for _, part := range candidate.Content.Parts {
-		if part.ImageData != nil && part.ImageData.Data != "" {
+		if part.InlineData != nil && part.InlineData.Data != "" {
 			// 返回 Base64 数据
 			return &ComposeResult{
-				Base64:   part.ImageData.Data,
+				Base64:   part.InlineData.Data,
 				ImageURL: "", // Base64 模式下 ImageURL 为空
+			}, nil
+		}
+		if part.InlineDataCamel != nil && part.InlineDataCamel.Data != "" {
+			return &ComposeResult{
+				Base64:   part.InlineDataCamel.Data,
+				ImageURL: "",
 			}, nil
 		}
 
