@@ -3,13 +3,14 @@ import { SimpleFrame } from '../components/Layout';
 import { DownloadIcon, XIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
 
-export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, onPreview }) {
+export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, previewMode = 'compare', onPreview }) {
   const [showQR, setShowQR] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
   const [stylePrompts, setStylePrompts] = useState([]);
   const [originalImage, setOriginalImage] = useState(capturedImage);
   const [currentImage, setCurrentImage] = useState(capturedImage);
+  const isSinglePreview = previewMode === 'single';
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -174,8 +175,17 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
             返回首页
           </button>
         </div>
-        <div className="preview-stage-container" style={{ display: 'flex', gap: '20px', padding: '0 20px' }}>
+        <div
+          className="preview-stage-container"
+          style={{
+            display: 'flex',
+            gap: '20px',
+            padding: '0 20px',
+            justifyContent: isSinglePreview ? 'center' : 'stretch',
+          }}
+        >
           {/* Left: Original Image */}
+          {!isSinglePreview && (
           <div className="preview-stage" style={{ flex: 1, position: 'relative' }}>
             {originalImage ? (
               <>
@@ -194,9 +204,16 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
               </div>
             )}
           </div>
+          )}
 
           {/* Right: Current/Style Transferred Image */}
-          <div className="preview-stage" style={{ flex: 1, position: 'relative' }}>
+          <div
+            className="preview-stage"
+            style={{
+              flex: isSinglePreview ? '0 1 min(100%, 1080px)' : 1,
+              position: 'relative',
+            }}
+          >
             {currentImage ? (
               <>
                 <img 

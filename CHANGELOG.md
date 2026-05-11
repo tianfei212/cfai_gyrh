@@ -28,6 +28,27 @@
 - commit hash：未提交，提交后补充
 ```
 
+## 2026-05-11 22:58 UTC+8
+
+- 日期：2026-05-11
+- 更新时间：22:58 UTC+8
+- 分支：feature/frontend-addition
+- 目的：实现工作台右侧历史记录侧栏接入真实数据库总数与倒序缩略图，支持点击历史缩略图进入单图全屏效果预览，并复用独立历史页的数据映射与单图预览模式。
+- 执行者：GPT-5.5（GPT-5.5，OpenAI）
+- 文件清单：
+  - `CHANGELOG.md`
+  - `gyrh-go-v2/frontend/src/App.jsx`
+  - `gyrh-go-v2/frontend/src/components/Layout.jsx`
+  - `gyrh-go-v2/frontend/src/screens/DashboardScreen.jsx`
+  - `gyrh-go-v2/frontend/src/screens/HistoryScreen.jsx`
+  - `gyrh-go-v2/frontend/src/screens/PreviewScreen.jsx`
+  - `gyrh-go-v2/frontend/src/styles.css`
+  - `gyrh-go-v2/frontend/src/utils/historyRecords.js`
+  - `gyrh-go-v2/frontend/src/utils/historyRecords.test.js`
+  - `gyrh-go-v2/frontend/src/utils/previewSelection.js`
+  - `gyrh-go-v2/frontend/src/utils/previewSelection.test.js`
+- commit hash：未提交，提交后补充
+
 ## 2026-05-11 22:12 UTC+8
 
 - 日期：2026-05-11

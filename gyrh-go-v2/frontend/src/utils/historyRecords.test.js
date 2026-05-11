@@ -1,0 +1,61 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  buildHistoryPreviewPayload,
+  buildHistoryTitle,
+  mapGeneratedImagesToHistoryRecords,
+} from './historyRecords.js';
+
+test('maps generated images to newest-first history records without reordering', () => {
+  const records = mapGeneratedImagesToHistoryRecords([
+    {
+      id: 74,
+      asset_id: 'generated:newest.png',
+      image_url: 'https://example.com/newest.png',
+      provider: 'wan',
+      status: 'succeeded',
+      created_at: '2026-05-11T14:00:00Z',
+      image_width: 1080,
+      image_height: 1920,
+    },
+    {
+      id: 73,
+      asset_id: 'generated:older.png',
+      image_url: 'https://example.com/older.png',
+      style_transform: 'google',
+      status: 'succeeded',
+      created_at: '2026-05-11T13:00:00Z',
+    },
+  ]);
+
+  assert.deepEqual(
+    records.map((record) => record.id),
+    [74, 73],
+  );
+  assert.equal(
+    records[0].url,
+    '/api/v1/images/thumbnail?asset_id=generated%3Anewest.png&w=400&h=225',
+  );
+  assert.equal(records[0].rawUrl, 'https://example.com/newest.png');
+  assert.equal(records[1].provider, 'google');
+  assert.equal(records[1].width, 0);
+  assert.equal(records[1].height, 0);
+});
+
+test('builds history title from real database total', () => {
+  assert.equal(buildHistoryTitle(74), '历史记录 (74)');
+});
+
+test('builds single-image preview payload from a history record', () => {
+  assert.deepEqual(
+    buildHistoryPreviewPayload({
+      id: 1,
+      url: '/api/v1/images/thumbnail?asset_id=one&w=400&h=225',
+      rawUrl: '/api/v1/images/view?id=1',
+    }),
+    {
+      image: '/api/v1/images/view?id=1',
+      mode: 'single',
+    },
+  );
+});

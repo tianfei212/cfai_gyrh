@@ -11,12 +11,14 @@ import { CaptureScreen } from './screens/CaptureScreen';
 import { RenderingScreen } from './screens/RenderingScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { LogoutScreen } from './screens/LogoutScreen';
+import { normalizePreviewSelection } from './utils/previewSelection';
 
 function App() {
   const [screen, setScreen] = useState('dashboard');
   const [model, setModel] = useState('W'); // 'W' for Wan, 'G' for Gemini
   const [selectedBg, setSelectedBg] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
+  const [previewMode, setPreviewMode] = useState('compare');
 
   const activeScreen = useMemo(
     () => screens.find((item) => item.key === screen) ?? screens[0],
@@ -46,8 +48,10 @@ function App() {
     setSelectedBg(bg);
     changeScreen('capture');
   };
-  const goPreview = (image) => {
-    setCapturedImage(image);
+  const goPreview = (selection) => {
+    const nextPreview = normalizePreviewSelection(selection);
+    setCapturedImage(nextPreview.image);
+    setPreviewMode(nextPreview.mode);
     changeScreen('preview');
   };
   const logout = () => changeScreen('logout');
@@ -68,6 +72,7 @@ function App() {
     model: model,
     selectedBg: selectedBg,
     capturedImage: capturedImage,
+    previewMode: previewMode,
   };
 
   return (

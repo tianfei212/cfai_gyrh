@@ -1,6 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { HomeIcon, StackIcon, ExitIcon, SearchIcon } from './Icons';
 import { screens } from '../constants';
+import { fetchApi } from '../services/api';
+import {
+  buildHistoryPreviewPayload,
+  buildHistoryTitle,
+  mapGeneratedImagesToHistoryRecords,
+} from '../utils/historyRecords';
 
 export function HeaderIcon({ icon, label, onClick }) {
   return (
@@ -75,20 +81,64 @@ export function ControlRail({ screen, onSelect }) {
   );
 }
 
-export function HistorySidebar() {
+export function HistorySidebar({ onPreview }) {
+  const [history, setHistory] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const limit = 5;
+
+  const fetchHistory = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchApi(`/api/v1/images?limit=${limit}&offset=0`);
+      setHistory(mapGeneratedImagesToHistoryRecords(data.images || []));
+      setTotal(data.total || 0);
+    } catch (err) {
+      console.error('Failed to fetch sidebar history:', err);
+      setHistory([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
   return (
     <aside className="history-sidebar">
       <div className="section-topline">
-        <h2>历史记录 (74)</h2>
+        <h2>{buildHistoryTitle(total)}</h2>
       </div>
       <div className="sidebar-list">
-        {['blue', 'red', 'red', 'blue', 'red'].map((tone, index) => (
-          <div key={`${tone}-${index}`} className={`sidebar-card tone-${tone}`} />
-        ))}
+        {loading ? (
+          ['blue', 'red', 'red', 'blue', 'red'].map((tone, index) => (
+            <div key={`${tone}-${index}`} className={`sidebar-card tone-${tone} sidebar-card-loading`} />
+          ))
+        ) : history.length === 0 ? (
+          <div className="sidebar-empty">暂无历史记录</div>
+        ) : (
+          history.map((record) => (
+            <button
+              key={record.id}
+              className="sidebar-card sidebar-card-image"
+              type="button"
+              title={`生成时间: ${new Date(record.created_at).toLocaleString()}`}
+              onClick={() => onPreview?.(buildHistoryPreviewPayload(record))}
+            >
+              {record.url ? (
+                <img src={record.url} alt={`历史记录 ${record.id}`} />
+              ) : (
+                <span>图片丢失</span>
+              )}
+            </button>
+          ))
+        )}
       </div>
       <div className="sidebar-search">
         <input placeholder="搜索历史记录" />
-        <button type="button">
+        <button type="button" onClick={fetchHistory}>
           <SearchIcon />
         </button>
       </div>

@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
 import { ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
-import { buildImageThumbnailUrl } from '../utils/imageThumbs';
+import {
+  buildHistoryPreviewPayload,
+  buildHistoryTitle,
+  mapGeneratedImagesToHistoryRecords,
+} from '../utils/historyRecords';
 
 export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, model, onPreview }) {
   const [history, setHistory] = useState([]);
@@ -16,17 +20,7 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       setLoading(true);
       const offset = (pageNumber - 1) * limit;
       const data = await fetchApi(`/api/v1/images?limit=${limit}&offset=${offset}`);
-      const mappedHistory = (data.images || []).map(img => ({
-        id: img.id,
-        url: buildImageThumbnailUrl({ assetId: img.asset_id, imageUrl: img.image_url }),
-        rawUrl: img.image_url || `/api/v1/images/view?id=${img.id}`,
-        provider: img.provider || img.style_transform,
-        status: img.status,
-        created_at: img.created_at,
-        width: img.image_width || 0,
-        height: img.image_height || 0,
-      }));
-      setHistory(mappedHistory);
+      setHistory(mapGeneratedImagesToHistoryRecords(data.images || []));
       setTotal(data.total || 0);
     } catch (err) {
       console.error('Failed to fetch history:', err);
@@ -60,7 +54,7 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     >
       <section className="glass-section history-panel">
         <div className="section-stack">
-          <h2>生成记录（全部）</h2>
+          <h2>{buildHistoryTitle(total)}</h2>
           <div className="chip-row compact">
             <button className="tiny-chip active" type="button" onClick={() => fetchHistory(1)}>刷新</button>
           </div>
@@ -76,7 +70,7 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                 key={card.id}
                 className="history-card"
                 title={`生成时间: ${new Date(card.created_at).toLocaleString()}`}
-                onClick={() => onPreview(card.rawUrl || card.url)}
+                onClick={() => onPreview(buildHistoryPreviewPayload(card))}
                 style={{ 
                   cursor: 'pointer',
                   aspectRatio: '16 / 9'

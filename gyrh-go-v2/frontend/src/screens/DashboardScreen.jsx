@@ -4,7 +4,7 @@ import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, RefreshIcon, Chevro
 import { fetchApi } from '../services/api';
 import { buildImageThumbnailUrl } from '../utils/imageThumbs';
 
-export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, model }) {
+export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, onPreview, model }) {
   const fileInputRef = useRef(null);
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -109,7 +109,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
         </>
       }
       rightSidebar={
-        <HistorySidebar />
+        <HistorySidebar onPreview={onPreview} />
       }
     >
       <section className="glass-section hero-workspace">
