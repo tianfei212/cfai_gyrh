@@ -78,7 +78,7 @@
 - 验证：
   - `cd gyrh-go-v2/backend && go test ./...`
   - `cd gyrh-go-v2/frontend && npm run build`
-- commit hash：未提交，提交后补充
+- commit hash：`35cecaf`
 
 ## 2026-05-12 15:44 UTC+8
 
