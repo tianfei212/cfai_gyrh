@@ -7,6 +7,7 @@ import {
   buildHistoryTitle,
   mapGeneratedImagesToHistoryRecords,
 } from '../utils/historyRecords';
+import { getModelLabel } from '../utils/modelProvider';
 
 export function HeaderIcon({ icon, label, onClick }) {
   return (
@@ -44,7 +45,7 @@ export function SimpleFrame({ title, children, onHome, onHistory, onLogout, onTo
   return (
     <div className="simple-screen">
       <TopBar title={title}>
-        <HeaderIcon label={model === 'W' ? 'W' : 'G'} onClick={onToggleModel} />
+        <HeaderIcon label={getModelLabel(model)} onClick={onToggleModel} />
         <HeaderIcon icon={<HomeIcon />} onClick={onHome} />
         <HeaderIcon icon={<StackIcon />} onClick={onHistory} />
         <HeaderIcon icon={<ExitIcon />} onClick={onLogout} />
@@ -81,16 +82,29 @@ export function ControlRail({ screen, onSelect }) {
   );
 }
 
+function SidebarPagerIcon({ direction }) {
+  const path = direction === 'left' ? 'm14.5 7.5-4.5 4.5 4.5 4.5' : 'm9.5 7.5 4.5 4.5-4.5 4.5';
+
+  return (
+    <svg className="sidebar-pager-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d={path} stroke="#f4f7ff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" />
+    </svg>
+  );
+}
+
 export function HistorySidebar({ onPreview }) {
   const [history, setHistory] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
   const limit = 5;
+  const totalPages = Math.ceil(total / limit) || 1;
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (pageNumber = page) => {
     try {
       setLoading(true);
-      const data = await fetchApi(`/api/v1/images?limit=${limit}&offset=0`);
+      const offset = (pageNumber - 1) * limit;
+      const data = await fetchApi(`/api/v1/images?limit=${limit}&offset=${offset}`);
       setHistory(mapGeneratedImagesToHistoryRecords(data.images || []));
       setTotal(data.total || 0);
     } catch (err) {
@@ -103,13 +117,51 @@ export function HistorySidebar({ onPreview }) {
   };
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    fetchHistory(page);
+  }, [page]);
+
+  const handlePrevPage = () => {
+    if (page > 1 && !loading) {
+      setPage(page - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (page < totalPages && !loading) {
+      setPage(page + 1);
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchHistory(page);
+  };
 
   return (
     <aside className="history-sidebar">
       <div className="section-topline">
-        <h2>{buildHistoryTitle(total)}</h2>
+        <div className="sidebar-title-row">
+          <h2>{buildHistoryTitle(total)}</h2>
+          <div className="sidebar-pager" aria-label="历史记录翻页">
+            <button
+              className="tiny-chip icon-chip"
+              type="button"
+              aria-label="上一页历史记录"
+              onClick={handlePrevPage}
+              disabled={page === 1 || loading}
+            >
+              <SidebarPagerIcon direction="left" />
+            </button>
+            <button
+              className="tiny-chip icon-chip"
+              type="button"
+              aria-label="下一页历史记录"
+              onClick={handleNextPage}
+              disabled={page >= totalPages || loading}
+            >
+              <SidebarPagerIcon direction="right" />
+            </button>
+          </div>
+        </div>
       </div>
       <div className="sidebar-list">
         {loading ? (
@@ -138,7 +190,7 @@ export function HistorySidebar({ onPreview }) {
       </div>
       <div className="sidebar-search">
         <input placeholder="搜索历史记录" />
-        <button type="button" onClick={fetchHistory}>
+        <button type="button" onClick={handleRefresh}>
           <SearchIcon />
         </button>
       </div>

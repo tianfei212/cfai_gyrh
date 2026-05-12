@@ -3,6 +3,7 @@ import { WorkbenchLayout, HeaderIcon, HistorySidebar } from '../components/Layou
 import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
 import { buildImageThumbnailUrl } from '../utils/imageThumbs';
+import { getModelLabel, isGPTModel } from '../utils/modelProvider';
 
 export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, onPreview, model }) {
   const fileInputRef = useRef(null);
@@ -102,7 +103,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
       title="AI Smart Portrait · Apple Glass"
       headerActions={
         <>
-          <HeaderIcon label={model === 'W' ? 'W' : 'G'} onClick={onToggleModel} />
+          <HeaderIcon label={getModelLabel(model)} onClick={onToggleModel} />
           <HeaderIcon icon={<HomeIcon />} onClick={onHome} />
           <HeaderIcon icon={<StackIcon />} onClick={onHistory} />
           <HeaderIcon icon={<ExitIcon />} onClick={onLogout} />
@@ -203,7 +204,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
                 className="gallery-card"
                 onClick={handleUseImage(card)}
                 style={{ cursor: 'pointer', backgroundImage: card.image_url ? `url(${buildImageThumbnailUrl({ imageUrl: card.image_url })})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
-                title={model === 'W' ? card.wan_prompt : card.gemini_prompt}
+                title={isGPTModel(model) ? '302 GPT Image 通用融合 Skill' : model === 'W' ? card.wan_prompt : card.gemini_prompt}
               >
                 <span style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 8px', borderRadius: '4px' }}>{card.name || `背景 ${card.id}`}</span>
               </article>

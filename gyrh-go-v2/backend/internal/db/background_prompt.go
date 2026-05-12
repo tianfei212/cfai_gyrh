@@ -18,6 +18,10 @@ type BackgroundPrompt struct {
 	WanNegativePrompt      string    `json:"wan_negative_prompt"`
 	WanPromptZH            string    `json:"wan_prompt_zh"`
 	WanNegativePromptZH    string    `json:"wan_negative_prompt_zh"`
+	GPTPrompt              string    `json:"gpt_prompt"`
+	GPTNegativePrompt      string    `json:"gpt_negative_prompt"`
+	GPTPromptZH            string    `json:"gpt_prompt_zh"`
+	GPTNegativePromptZH    string    `json:"gpt_negative_prompt_zh"`
 	ImageAssetID           string    `json:"image_asset_id"`
 	ImageURL               string    `json:"image_url"`
 	ImageWidth             int       `json:"image_width"`
@@ -37,6 +41,10 @@ type BackgroundPromptPatch struct {
 	WanNegativePrompt      *string
 	WanPromptZH            *string
 	WanNegativePromptZH    *string
+	GPTPrompt              *string
+	GPTNegativePrompt      *string
+	GPTPromptZH            *string
+	GPTNegativePromptZH    *string
 	ImageAssetID           *string
 	ImageURL               *string
 	ImageWidth             *int
@@ -54,14 +62,14 @@ func NewBackgroundPromptRepo(db *DB) *BackgroundPromptRepo {
 }
 
 // Create 创建新的背景图提示词模板。
-func (r *BackgroundPromptRepo) Create(name, geminiPrompt, geminiNegativePrompt, geminiPromptZH, geminiNegativePromptZH, wanPrompt, wanNegativePrompt, wanPromptZH, wanNegativePromptZH, imageAssetID, imageURL string, imageWidth, imageHeight int) (int64, error) {
+func (r *BackgroundPromptRepo) Create(name, geminiPrompt, geminiNegativePrompt, geminiPromptZH, geminiNegativePromptZH, wanPrompt, wanNegativePrompt, wanPromptZH, wanNegativePromptZH, gptPrompt, gptNegativePrompt, gptPromptZH, gptNegativePromptZH, imageAssetID, imageURL string, imageWidth, imageHeight int) (int64, error) {
 	now := time.Now()
 	result, err := r.db.Exec(`
 		INSERT INTO background_prompts (
-			name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
+			name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, gpt_prompt, gpt_negative_prompt, gpt_prompt_zh, gpt_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, name, geminiPrompt, geminiNegativePrompt, geminiPromptZH, geminiNegativePromptZH, wanPrompt, wanNegativePrompt, wanPromptZH, wanNegativePromptZH, imageAssetID, imageURL, imageWidth, imageHeight, now, now)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, name, geminiPrompt, geminiNegativePrompt, geminiPromptZH, geminiNegativePromptZH, wanPrompt, wanNegativePrompt, wanPromptZH, wanNegativePromptZH, gptPrompt, gptNegativePrompt, gptPromptZH, gptNegativePromptZH, imageAssetID, imageURL, imageWidth, imageHeight, now, now)
 	if err != nil {
 		return 0, fmt.Errorf("插入背景图提示词模板失败: %w", err)
 	}
@@ -76,7 +84,7 @@ func (r *BackgroundPromptRepo) Create(name, geminiPrompt, geminiNegativePrompt, 
 // GetByID 根据 ID 获取背景图提示词模板。
 func (r *BackgroundPromptRepo) GetByID(id int64) (*BackgroundPrompt, error) {
 	row := r.db.QueryRow(`
-		SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
+		SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, gpt_prompt, gpt_negative_prompt, gpt_prompt_zh, gpt_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
 		FROM background_prompts
 		WHERE id = ?
 	`, id)
@@ -93,6 +101,10 @@ func (r *BackgroundPromptRepo) GetByID(id int64) (*BackgroundPrompt, error) {
 		&item.WanNegativePrompt,
 		&item.WanPromptZH,
 		&item.WanNegativePromptZH,
+		&item.GPTPrompt,
+		&item.GPTNegativePrompt,
+		&item.GPTPromptZH,
+		&item.GPTNegativePromptZH,
 		&item.ImageAssetID,
 		&item.ImageURL,
 		&item.ImageWidth,
@@ -112,7 +124,7 @@ func (r *BackgroundPromptRepo) GetByID(id int64) (*BackgroundPrompt, error) {
 // GetByName 根据名称获取背景图提示词模板。
 func (r *BackgroundPromptRepo) GetByName(name string) (*BackgroundPrompt, error) {
 	row := r.db.QueryRow(`
-		SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
+		SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, gpt_prompt, gpt_negative_prompt, gpt_prompt_zh, gpt_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
 		FROM background_prompts
 		WHERE name = ?
 	`, name)
@@ -129,6 +141,10 @@ func (r *BackgroundPromptRepo) GetByName(name string) (*BackgroundPrompt, error)
 		&item.WanNegativePrompt,
 		&item.WanPromptZH,
 		&item.WanNegativePromptZH,
+		&item.GPTPrompt,
+		&item.GPTNegativePrompt,
+		&item.GPTPromptZH,
+		&item.GPTNegativePromptZH,
 		&item.ImageAssetID,
 		&item.ImageURL,
 		&item.ImageWidth,
@@ -154,14 +170,14 @@ func (r *BackgroundPromptRepo) List(limit, offset int) ([]*BackgroundPrompt, err
 
 	if limit > 0 {
 		rows, err = r.db.Query(`
-			SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
+			SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, gpt_prompt, gpt_negative_prompt, gpt_prompt_zh, gpt_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
 			FROM background_prompts
 			ORDER BY updated_at DESC, id DESC
 			LIMIT ? OFFSET ?
 		`, limit, offset)
 	} else {
 		rows, err = r.db.Query(`
-			SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
+			SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, gpt_prompt, gpt_negative_prompt, gpt_prompt_zh, gpt_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
 			FROM background_prompts
 			ORDER BY updated_at DESC, id DESC
 		`)
@@ -214,6 +230,22 @@ func (r *BackgroundPromptRepo) Update(id int64, patch BackgroundPromptPatch) err
 	if patch.WanNegativePromptZH != nil {
 		setClauses = append(setClauses, "wan_negative_prompt_zh = ?")
 		args = append(args, *patch.WanNegativePromptZH)
+	}
+	if patch.GPTPrompt != nil {
+		setClauses = append(setClauses, "gpt_prompt = ?")
+		args = append(args, *patch.GPTPrompt)
+	}
+	if patch.GPTNegativePrompt != nil {
+		setClauses = append(setClauses, "gpt_negative_prompt = ?")
+		args = append(args, *patch.GPTNegativePrompt)
+	}
+	if patch.GPTPromptZH != nil {
+		setClauses = append(setClauses, "gpt_prompt_zh = ?")
+		args = append(args, *patch.GPTPromptZH)
+	}
+	if patch.GPTNegativePromptZH != nil {
+		setClauses = append(setClauses, "gpt_negative_prompt_zh = ?")
+		args = append(args, *patch.GPTNegativePromptZH)
 	}
 	if patch.ImageAssetID != nil {
 		setClauses = append(setClauses, "image_asset_id = ?")
@@ -297,6 +329,10 @@ func (r *BackgroundPromptRepo) scanBackgroundPrompts(rows *sql.Rows) ([]*Backgro
 			&item.WanNegativePrompt,
 			&item.WanPromptZH,
 			&item.WanNegativePromptZH,
+			&item.GPTPrompt,
+			&item.GPTNegativePrompt,
+			&item.GPTPromptZH,
+			&item.GPTNegativePromptZH,
 			&item.ImageAssetID,
 			&item.ImageURL,
 			&item.ImageWidth,

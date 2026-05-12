@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
 import { fetchApi } from '../services/api';
+import {
+  BACKGROUND_MANAGER_PAGE_SIZE,
+  buildBackgroundPromptListUrl,
+  getPageAfterRefresh,
+  getTotalPages,
+} from '../utils/backgroundPagination';
+import siteConfig from '../../../../siteConfig.json';
 
 function BackgroundEditModal({ item, onClose, onSaved }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -13,6 +20,8 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
     wan_prompt: item.wan_prompt || '',
     gemini_prompt_zh: item.gemini_prompt_zh || '',
     gemini_prompt: item.gemini_prompt || '',
+    gpt_prompt_zh: item.gpt_prompt_zh || '',
+    gpt_prompt: item.gpt_prompt || '',
   });
 
   const handleChange = (field, value) => {
@@ -28,13 +37,16 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
           wan_prompt_zh: formData.wan_prompt_zh,
           wan_negative_prompt_zh: item.wan_negative_prompt_zh || '',
           gemini_prompt_zh: formData.gemini_prompt_zh,
-          gemini_negative_prompt_zh: item.gemini_negative_prompt_zh || ''
+          gemini_negative_prompt_zh: item.gemini_negative_prompt_zh || '',
+          gpt_prompt_zh: formData.gpt_prompt_zh,
+          gpt_negative_prompt_zh: item.gpt_negative_prompt_zh || ''
         })
       });
       setFormData(prev => ({
         ...prev,
         wan_prompt: data.wan_prompt_en || prev.wan_prompt,
         gemini_prompt: data.gemini_prompt_en || prev.gemini_prompt,
+        gpt_prompt: data.gpt_prompt_en || prev.gpt_prompt,
       }));
       alert('翻译完成！');
     } catch (err) {
@@ -125,6 +137,24 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
               style={{ width: '100%', height: '120px', padding: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px', resize: 'vertical' }}
             />
           </div>
+          <div>
+            <h4 style={{ margin: '0 0 10px 0' }}>GPT 中文提示词</h4>
+            <textarea
+              value={formData.gpt_prompt_zh}
+              onChange={(e) => handleChange('gpt_prompt_zh', e.target.value)}
+              disabled={!isEditing}
+              style={{ width: '100%', height: '120px', padding: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px', resize: 'vertical' }}
+            />
+          </div>
+          <div>
+            <h4 style={{ margin: '0 0 10px 0' }}>GPT 英文提示词</h4>
+            <textarea
+              value={formData.gpt_prompt}
+              onChange={(e) => handleChange('gpt_prompt', e.target.value)}
+              disabled={!isEditing}
+              style={{ width: '100%', height: '120px', padding: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px', resize: 'vertical' }}
+            />
+          </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
@@ -147,19 +177,45 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
   );
 }
 
+function OriginalImagePreviewModal({ item, onClose }) {
+  if (!item?.image_url) return null;
+
+  return (
+    <div className="image-preview-overlay" onClick={onClose}>
+      <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="image-preview-header">
+          <div>
+            <p>原图预览</p>
+            <h3>{item.name || `背景 ${item.id}`}</h3>
+          </div>
+          <button className="mini-outline" type="button" onClick={onClose}>关闭</button>
+        </div>
+        <div className="image-preview-stage">
+          <img src={item.image_url} alt={item.name || '背景原图'} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleModel, model }) {
   const [backgrounds, setBackgrounds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [previewingItem, setPreviewingItem] = useState(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const fileInputRef = React.useRef(null);
+  const limit = BACKGROUND_MANAGER_PAGE_SIZE;
 
-  const fetchBackgrounds = async () => {
+  const fetchBackgrounds = async (targetPage = page) => {
     try {
       setLoading(true);
-      const data = await fetchApi('/api/v1/background-prompts');
-      // Adjust to your actual API response structure. Assuming { success: true, prompts: [...] }
+      const data = await fetchApi(buildBackgroundPromptListUrl(targetPage, limit));
       setBackgrounds(data.items || data.prompts || []);
+      setTotal(data.total || 0);
     } catch (err) {
       console.error('Failed to fetch backgrounds:', err);
     } finally {
@@ -169,13 +225,31 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
 
   useEffect(() => {
     fetchBackgrounds();
-  }, []);
+  }, [page]);
+
+  const refreshBackgrounds = async ({ resetToFirstPage = false } = {}) => {
+    const nextPage = getPageAfterRefresh(page, { resetToFirstPage });
+    if (nextPage !== page) {
+      setPage(nextPage);
+      return;
+    }
+    await fetchBackgrounds(nextPage);
+  };
+
+  const handlePrevPage = () => {
+    setPage(prev => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    const totalPages = getTotalPages(total, limit);
+    setPage(prev => Math.min(totalPages, prev + 1));
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm('确认删除该背景吗？')) return;
     try {
       await fetchApi(`/api/v1/background-prompts/${id}`, { method: 'DELETE' });
-      fetchBackgrounds();
+      refreshBackgrounds();
     } catch (err) {
       alert('删除失败: ' + err.message);
     }
@@ -184,6 +258,29 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
   const handleImportClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
+    }
+  };
+
+  const handleSyncRemote = async () => {
+    const apiUrl = siteConfig?.gallery?.apiUrl;
+    if (!apiUrl) {
+      alert('未配置远端图库地址');
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      const result = await fetchApi('/api/v1/background-prompts/sync-remote', {
+        method: 'POST',
+        body: JSON.stringify({ api_url: apiUrl })
+      });
+      await refreshBackgrounds({ resetToFirstPage: true });
+      const failures = result.failures?.length ? `，失败 ${result.failed} 条` : '';
+      alert(`同步完成：新增 ${result.imported} 条，跳过 ${result.skipped} 条${failures}`);
+    } catch (err) {
+      alert('同步失败: ' + err.message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -202,7 +299,7 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
             body: JSON.stringify({ image: base64Str, name: file.name.split('.')[0] })
           });
           console.log('Import response:', res);
-          fetchBackgrounds();
+          refreshBackgrounds({ resetToFirstPage: true });
         } catch (apiErr) {
           alert('导入失败: ' + apiErr.message);
         } finally {
@@ -244,8 +341,12 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
             <button className="tiny-chip" type="button" onClick={handleImportClick} disabled={importing}>
               {importing ? '导入中...' : '导入'}
             </button>
-            <button className="tiny-chip" type="button">同步</button>
-            <button className="tiny-chip active" type="button" onClick={fetchBackgrounds}>本地库</button>
+            <button className="tiny-chip" type="button" onClick={handleSyncRemote} disabled={syncing || importing}>
+              {syncing ? '同步中...' : '同步'}
+            </button>
+            <button className="tiny-chip active" type="button" onClick={() => refreshBackgrounds()} disabled={loading || syncing || importing}>
+              {loading ? '刷新中...' : '本地库'}
+            </button>
           </div>
         </div>
         <div className="table-shell">
@@ -254,6 +355,7 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
             <span>缩略图</span>
             <span>Wan 提示词</span>
             <span>Gemini 提示词</span>
+            <span>GPT 提示词</span>
             <span>操作</span>
           </div>
           {loading ? (
@@ -270,14 +372,26 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
                 />
                 <span title={row.wan_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.wan_prompt_zh || '-'}</span>
                 <span title={row.gemini_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gemini_prompt_zh || '-'}</span>
+                <span title={row.gpt_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gpt_prompt_zh || '-'}</span>
                 <div className="table-actions">
-                  {row.image_url && <button className="mini-outline" type="button" onClick={() => window.open(row.image_url, '_blank')}>查看原图</button>}
+                  {row.image_url && <button className="mini-outline" type="button" onClick={() => setPreviewingItem(row)}>查看原图</button>}
                   <button className="mini-outline" type="button" onClick={() => setEditingItem(row)}>编辑</button>
                   <button className="mini-outline" type="button" onClick={() => handleDelete(row.id)}>删除</button>
                 </div>
               </div>
             ))
           )}
+        </div>
+        <div className="table-pager">
+          <button className="mini-outline" type="button" onClick={handlePrevPage} disabled={loading || page <= 1}>
+            上一页
+          </button>
+          <span>
+            第 {page} / {getTotalPages(total, limit)} 页 · 共 {total} 条
+          </span>
+          <button className="mini-outline" type="button" onClick={handleNextPage} disabled={loading || page >= getTotalPages(total, limit)}>
+            下一页
+          </button>
         </div>
       </section>
       {editingItem && (
@@ -286,8 +400,14 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
           onClose={() => setEditingItem(null)} 
           onSaved={() => {
             setEditingItem(null);
-            fetchBackgrounds();
+            refreshBackgrounds();
           }} 
+        />
+      )}
+      {previewingItem && (
+        <OriginalImagePreviewModal
+          item={previewingItem}
+          onClose={() => setPreviewingItem(null)}
         />
       )}
     </SimpleFrame>

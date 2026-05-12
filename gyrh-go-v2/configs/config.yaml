@@ -31,6 +31,15 @@ alioss:
   binary_path: ./bin/oss-cli
   health_wait_seconds: 15
 
+helpper302:
+  enabled: true
+  base_url: https://api.302.ai
+  provider: 302-gpt-image
+  model_name: gpt-image-2
+  mode: async
+  poll_interval_seconds: 2
+  max_wait_seconds: 300
+
 import:
   enabled: true
   generated_dir: ./backend/data/generated_import

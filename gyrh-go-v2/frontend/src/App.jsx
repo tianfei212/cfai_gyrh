@@ -11,11 +11,12 @@ import { CaptureScreen } from './screens/CaptureScreen';
 import { RenderingScreen } from './screens/RenderingScreen';
 import { LoginScreen } from './screens/LoginScreen';
 import { LogoutScreen } from './screens/LogoutScreen';
+import { getNextModel } from './utils/modelProvider';
 import { normalizePreviewSelection } from './utils/previewSelection';
 
 function App() {
   const [screen, setScreen] = useState('dashboard');
-  const [model, setModel] = useState('W'); // 'W' for Wan, 'G' for Gemini
+  const [model, setModel] = useState('W'); // W: Wan, G: Gemini, GPT: 302 GPT Image
   const [selectedBg, setSelectedBg] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
   const [previewMode, setPreviewMode] = useState('compare');
@@ -34,7 +35,7 @@ function App() {
 
   const toggleModel = () => {
     setModel(prev => {
-      const next = prev === 'W' ? 'G' : 'W';
+      const next = getNextModel(prev);
       console.log(`[App] Toggle model: ${next}`);
       return next;
     });

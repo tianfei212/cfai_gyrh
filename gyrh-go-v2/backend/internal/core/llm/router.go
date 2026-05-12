@@ -2,11 +2,13 @@ package llm
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	gpt302 "gyrh-go-v2/backend/internal/302Helpper/GPT"
 	"gyrh-go-v2/backend/internal/config"
 	"gyrh-go-v2/backend/internal/core/llm/gemini"
 	"gyrh-go-v2/backend/internal/core/llm/wan"
@@ -62,6 +64,12 @@ type resolvedPrompt struct {
 // Service 定义大模型服务能力。
 type Service interface {
 	Compose(ctx context.Context, params ComposeParams) (*ComposeResult, error)
+	StartCompose(ctx context.Context, params ComposeParams) (*StartedComposeTask, error)
+	WaitComposeResult(ctx context.Context, provider, externalTaskID string) (*ComposeResult, error)
+}
+
+type StartedComposeTask struct {
+	ExternalTaskID string
 }
 
 type service struct {
@@ -71,6 +79,7 @@ type service struct {
 	storageService       storage.StorageService
 	geminiHandler        *gemini.GeminiHandler
 	wanHandler           *wan.WanHandler
+	helpper302Client     *gpt302.Client
 }
 
 // NewService 创建大模型服务。
@@ -84,9 +93,67 @@ func NewService(cfg *config.Config, storageService storage.StorageService, skill
 		storageService:       storageService,
 		geminiHandler:        gemini.NewGeminiHandler(storageService, cfg.Models.Gemini, requestTimeout),
 		wanHandler:           wan.NewWanHandler(storageService, cfg.Models.Wan, requestTimeout),
+		helpper302Client: gpt302.NewClient(gpt302.Config{
+			Enabled:             cfg.Helpper302.Enabled,
+			BaseURL:             cfg.Helpper302.BaseURL,
+			ModelName:           cfg.Helpper302.ModelName,
+			PollIntervalSeconds: cfg.Helpper302.PollIntervalSeconds,
+			MaxWaitSeconds:      cfg.Helpper302.MaxWaitSeconds,
+		}),
 	}
 	logger.Info("图像生成服务初始化完成")
 	return svc, nil
+}
+
+func (s *service) StartCompose(ctx context.Context, params ComposeParams) (*StartedComposeTask, error) {
+	provider := normalizeProvider(params.Provider)
+	if provider != "302-gpt-image" {
+		return nil, fmt.Errorf("provider %s 不支持外部异步任务", provider)
+	}
+	resolved, err := s.buildPrompt(ctx, provider, params)
+	if err != nil {
+		return nil, err
+	}
+	characterAsset := firstImageByType(params.Images, ImageTypeCharacter)
+	if characterAsset == "" {
+		return nil, fmt.Errorf("302-gpt-image 需要人物图")
+	}
+	backgroundAsset := firstImageByType(params.Images, ImageTypeBackground)
+	if backgroundAsset == "" {
+		return nil, fmt.Errorf("302-gpt-image 需要背景图")
+	}
+	foregroundBytes, err := s.storageService.Read(ctx, characterAsset)
+	if err != nil {
+		return nil, fmt.Errorf("读取 302-gpt-image 人物图失败: %w", err)
+	}
+	backgroundBytes, err := s.storageService.Read(ctx, backgroundAsset)
+	if err != nil {
+		return nil, fmt.Errorf("读取 302-gpt-image 背景图失败: %w", err)
+	}
+	externalTaskID, err := s.helpper302Client.CreateTask(ctx, gpt302.ComposeRequest{
+		Prompt:          resolved.Prompt,
+		ForegroundImage: foregroundBytes,
+		BackgroundImage: backgroundBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &StartedComposeTask{ExternalTaskID: externalTaskID}, nil
+}
+
+func (s *service) WaitComposeResult(ctx context.Context, provider, externalTaskID string) (*ComposeResult, error) {
+	provider = normalizeProvider(provider)
+	if provider != "302-gpt-image" {
+		return nil, fmt.Errorf("provider %s 不支持外部异步任务", provider)
+	}
+	result, err := s.helpper302Client.WaitResult(ctx, externalTaskID)
+	if err != nil {
+		return nil, err
+	}
+	return &ComposeResult{
+		Base64: base64.StdEncoding.EncodeToString(result.Image),
+		Status: "succeeded",
+	}, nil
 }
 
 // ErrBackgroundPromptNotFound 表示请求中引用的背景图模板不存在。
@@ -137,6 +204,42 @@ func (s *service) Compose(ctx context.Context, params ComposeParams) (*ComposeRe
 			Status:   result.Status,
 			Error:    result.Error,
 		}, nil
+	case "302-gpt-image":
+		characterAsset := firstImageByType(params.Images, ImageTypeCharacter)
+		if characterAsset == "" {
+			return nil, fmt.Errorf("302-gpt-image 需要人物图")
+		}
+		backgroundAsset := firstImageByType(params.Images, ImageTypeBackground)
+		if backgroundAsset == "" {
+			return nil, fmt.Errorf("302-gpt-image 需要背景图")
+		}
+		foregroundBytes, err := s.storageService.Read(ctx, characterAsset)
+		if err != nil {
+			return nil, fmt.Errorf("读取 302-gpt-image 人物图失败: %w", err)
+		}
+		backgroundBytes, err := s.storageService.Read(ctx, backgroundAsset)
+		if err != nil {
+			return nil, fmt.Errorf("读取 302-gpt-image 背景图失败: %w", err)
+		}
+		result, err := s.helpper302Client.Compose(ctx, gpt302.ComposeRequest{
+			Prompt:          resolved.Prompt,
+			ForegroundImage: foregroundBytes,
+			BackgroundImage: backgroundBytes,
+		})
+		if err != nil {
+			logger.Error("302-gpt-image Compose Error: %v", err)
+			return nil, err
+		}
+
+		logger.Debug("========== 302-gpt-image Compose Response ==========")
+		logger.Debug("Result ImageURL: %s", result.URL)
+		logger.Debug("Result Bytes Length: %d", len(result.Image))
+		logger.Debug("====================================================")
+
+		return &ComposeResult{
+			Base64: base64.StdEncoding.EncodeToString(result.Image),
+			Status: "succeeded",
+		}, nil
 	default:
 		result, err := s.geminiHandler.Compose(ctx, &gemini.ComposeParams{
 			CharacterImage:  firstImageByType(params.Images, ImageTypeCharacter),
@@ -186,14 +289,45 @@ func (s *service) buildPrompt(ctx context.Context, provider string, params Compo
 			resolved.Prompt = strings.TrimSpace(item.WanPrompt)
 			resolved.NegativePrompt = strings.TrimSpace(item.WanNegativePrompt)
 			logger.Debug("背景提示词来源: background_prompts.id=%d, field=wan_prompt/wan_negative_prompt, name=%s, width=%d, height=%d", params.BackgroundPromptID, item.Name, item.ImageWidth, item.ImageHeight)
+		case "302-gpt-image":
+			resolved.Prompt = strings.TrimSpace(item.GPTPrompt)
+			resolved.NegativePrompt = strings.TrimSpace(item.GPTNegativePrompt)
+			logger.Debug("背景提示词来源: background_prompts.id=%d, field=gpt_prompt/gpt_negative_prompt, name=%s, width=%d, height=%d", params.BackgroundPromptID, item.Name, item.ImageWidth, item.ImageHeight)
 		default:
 			resolved.Prompt = strings.TrimSpace(item.GeminiPrompt)
 			resolved.NegativePrompt = strings.TrimSpace(item.GeminiNegativePrompt)
 			logger.Debug("背景提示词来源: background_prompts.id=%d, field=gemini_prompt/gemini_negative_prompt, name=%s, width=%d, height=%d", params.BackgroundPromptID, item.Name, item.ImageWidth, item.ImageHeight)
 		}
+
+		if resolved.Prompt == "" && resolved.NegativePrompt == "" {
+			if err := s.useActiveSkillPrompt(provider, resolved); err != nil {
+				return nil, err
+			}
+			logger.Debug("背景提示词为空，回退到 active skill: background_prompts.id=%d, provider=%s", params.BackgroundPromptID, provider)
+		}
+	}
+
+	if hasImageType(params.Images, ImageTypeBackground) && params.BackgroundPromptID == 0 {
+		if err := s.useActiveSkillPrompt(provider, resolved); err != nil {
+			return nil, err
+		}
 	}
 
 	return resolved, nil
+}
+
+func (s *service) useActiveSkillPrompt(provider string, resolved *resolvedPrompt) error {
+	if s.skillRepo == nil {
+		return fmt.Errorf("Skill 仓库未初始化，无法获取默认融合提示词")
+	}
+	skill, err := s.skillRepo.GetActive(provider)
+	if err != nil {
+		return fmt.Errorf("未找到当前模型的激活 Skill: provider=%s: %w", provider, err)
+	}
+	resolved.Prompt = strings.TrimSpace(skill.Content)
+	resolved.NegativePrompt = ""
+	logger.Debug("背景提示词来源: active skill id=%d, provider=%s, name=%s", skill.ID, provider, skill.Name)
+	return nil
 }
 
 // loadBackgroundPromptItem 加载背景图提示词模板。
@@ -231,6 +365,8 @@ func normalizeProvider(provider string) string {
 		return "google"
 	case "wan", "aliwan", "tongyi":
 		return "wan"
+	case "302-gpt-image", "gpt-image", "gpt":
+		return "302-gpt-image"
 	default:
 		return "google"
 	}

@@ -25,6 +25,12 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	return size, err
 }
 
+func (rw *responseWriter) Flush() {
+	if flusher, ok := rw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 // Logger 记录 HTTP 请求和响应信息的中间件
 func Logger() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

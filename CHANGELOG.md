@@ -28,6 +28,82 @@
 - commit hash：未提交，提交后补充
 ```
 
+## 2026-05-12 15:44 UTC+8
+
+- 日期：2026-05-12
+- 更新时间：15:44 UTC+8
+- 分支：feature/302-gpt-direct-integration
+- 目的：完成 302 GPT Image 直连集成与背景图库远端同步链路，并修复背景图管理页“查看原图”下载问题，改为当前页面内玻璃态原图预览。
+- 执行者：GPT-5.5（GPT-5.5，OpenAI）
+- 推送版本：feature/302-gpt-direct-integration@2026-05-12-1544（提交并推送后以远端分支 HEAD 为准）
+- 详细修改内容：
+  - 后端新增 302 GPT Image 客户端，支持创建异步图片编辑任务、轮询 async_result 并下载结果图。
+  - LLM 路由新增 `302-gpt-image` provider，支持同步 Compose、外部异步任务启动与结果等待，并在背景提示词为空时回退到对应 provider 的激活 Skill。
+  - 图像改写接口支持异步任务持久化、任务状态查询、SSE 事件订阅和服务重启后的运行中任务恢复。
+  - 背景提示词数据结构扩展 GPT 正/反向提示词及中英文版本，导入、编辑、同步英文和列表返回均带上 GPT 字段。
+  - 背景图库新增远端同步接口，支持从配置的远端图库 API 拉取图片、去重、下载入库并记录同步失败明细。
+  - 前端模型切换从 Wan/Gemini 扩展为 Wan/Gemini/302 GPT Image，并统一通过 provider 工具函数映射请求参数和显示标签。
+  - 拍摄页与预览页接入异步改写任务解析，302 GPT Image 可以先返回任务再等待最终图片。
+  - 背景图管理页新增分页、远端同步、GPT 提示词编辑列，并将“查看原图”改为当前页面内的玻璃态弹层预览，避免远端图片响应头触发浏览器下载。
+  - 技能管理页新增 302 GPT Image provider 选项，新增默认 302 GPT Image 技能配置。
+  - 新增配置、数据库迁移、工具函数与单元测试，覆盖 provider 轮转、背景分页、302 配置、异步任务和远端同步等关键路径。
+- 文件清单：
+  - `CHANGELOG.md`
+  - `gyrh-go-v2/backend/cmd/server/main.go`
+  - `gyrh-go-v2/backend/internal/302Helpper/GPT/client.go`
+  - `gyrh-go-v2/backend/internal/302Helpper/GPT/client_test.go`
+  - `gyrh-go-v2/backend/internal/api/handler/background_prompt.go`
+  - `gyrh-go-v2/backend/internal/api/handler/background_prompt_remote_test.go`
+  - `gyrh-go-v2/backend/internal/api/handler/image.go`
+  - `gyrh-go-v2/backend/internal/api/handler/image_async_test.go`
+  - `gyrh-go-v2/backend/internal/api/handler/rewrite_task.go`
+  - `gyrh-go-v2/backend/internal/api/middleware/logger.go`
+  - `gyrh-go-v2/backend/internal/api/middleware/logger_test.go`
+  - `gyrh-go-v2/backend/internal/api/router.go`
+  - `gyrh-go-v2/backend/internal/bootstrap/bootstrap.go`
+  - `gyrh-go-v2/backend/internal/bootstrap/bootstrap_test.go`
+  - `gyrh-go-v2/backend/internal/config/config.go`
+  - `gyrh-go-v2/backend/internal/config/config_test.go`
+  - `gyrh-go-v2/backend/internal/core/llm/qwen/advisor.go`
+  - `gyrh-go-v2/backend/internal/core/llm/router.go`
+  - `gyrh-go-v2/backend/internal/core/llm/router_test.go`
+  - `gyrh-go-v2/backend/internal/db/background_prompt.go`
+  - `gyrh-go-v2/backend/internal/db/db.go`
+  - `gyrh-go-v2/backend/internal/db/rewrite_task.go`
+  - `gyrh-go-v2/backend/internal/db/rewrite_task_test.go`
+  - `gyrh-go-v2/configs/config.yaml`
+  - `gyrh-go-v2/configs/skills/302-gpt-image.md`
+  - `gyrh-go-v2/configs/skills/qwen_background_prompt_suggestion.md`
+  - `gyrh-go-v2/configs/skills/qwen_sync_english.md`
+  - `gyrh-go-v2/docs/superpowers/plans/2026-05-11-local-background-skill-fusion.md`
+  - `gyrh-go-v2/docs/superpowers/plans/2026-05-12-302-gpt-direct-integration.md`
+  - `gyrh-go-v2/docs/superpowers/plans/2026-05-12-302-gpt-image-plugin.md`
+  - `gyrh-go-v2/docs/superpowers/plans/2026-05-12-remote-background-sync.md`
+  - `gyrh-go-v2/docs/superpowers/specs/2026-05-11-local-background-skill-fusion-design.md`
+  - `gyrh-go-v2/docs/superpowers/specs/2026-05-12-302-gpt-direct-integration-design.md`
+  - `gyrh-go-v2/docs/superpowers/specs/2026-05-12-302-gpt-image-plugin-design.md`
+  - `gyrh-go-v2/docs/superpowers/specs/2026-05-12-remote-background-sync-design.md`
+  - `gyrh-go-v2/frontend/src/App.jsx`
+  - `gyrh-go-v2/frontend/src/components/Layout.jsx`
+  - `gyrh-go-v2/frontend/src/screens/BackgroundManagerScreen.jsx`
+  - `gyrh-go-v2/frontend/src/screens/CaptureScreen.jsx`
+  - `gyrh-go-v2/frontend/src/screens/DashboardScreen.jsx`
+  - `gyrh-go-v2/frontend/src/screens/PreviewScreen.jsx`
+  - `gyrh-go-v2/frontend/src/screens/SkillManagerScreen.jsx`
+  - `gyrh-go-v2/frontend/src/services/api.js`
+  - `gyrh-go-v2/frontend/src/services/rewriteTask.js`
+  - `gyrh-go-v2/frontend/src/styles.css`
+  - `gyrh-go-v2/frontend/src/utils/backgroundPagination.js`
+  - `gyrh-go-v2/frontend/src/utils/backgroundPagination.test.js`
+  - `gyrh-go-v2/frontend/src/utils/modelProvider.js`
+  - `gyrh-go-v2/frontend/src/utils/modelProvider.test.js`
+  - `gyrh-go-v2/manage.sh`
+- 未纳入提交：
+  - `gyrh-go-v2/backend/data/gyrh.db*`：本地 SQLite 运行时数据文件。
+  - `gyrh-go-v2/bin/302helpper-*`：本地构建出的平台二进制产物。
+  - `gyrh-go-v2/configs/302Helpper_config.yaml`：包含明文内部 bearer token，避免泄露敏感配置。
+- commit hash：未提交，提交后补充
+
 ## 2026-05-11 23:36 UTC+8
 
 - 日期：2026-05-11

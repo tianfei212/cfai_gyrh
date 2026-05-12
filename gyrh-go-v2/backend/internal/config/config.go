@@ -12,15 +12,16 @@ import (
 
 // Config 全局配置结构体。
 type Config struct {
-	Server  ServerConfig  `yaml:"server"`
-	Matting MattingConfig `yaml:"matting"`
-	Storage StorageConfig `yaml:"storage"`
-	Skill   SkillConfig   `yaml:"skill"`
-	Models  ModelConfig   `yaml:"models"`
-	AliOSS  AliOSSConfig  `yaml:"alioss"`
-	Import  ImportConfig  `yaml:"import"`
-	Gallery GalleryConfig `yaml:"gallery"`
-	Logger  LoggerConfig  `yaml:"logger"`
+	Server     ServerConfig     `yaml:"server"`
+	Matting    MattingConfig    `yaml:"matting"`
+	Storage    StorageConfig    `yaml:"storage"`
+	Skill      SkillConfig      `yaml:"skill"`
+	Models     ModelConfig      `yaml:"models"`
+	AliOSS     AliOSSConfig     `yaml:"alioss"`
+	Helpper302 Helpper302Config `yaml:"helpper302"`
+	Import     ImportConfig     `yaml:"import"`
+	Gallery    GalleryConfig    `yaml:"gallery"`
+	Logger     LoggerConfig     `yaml:"logger"`
 }
 
 // ServerConfig HTTP 服务配置。
@@ -76,6 +77,17 @@ type AliOSSConfig struct {
 	GeneratedBucketPrefix  string `yaml:"generated_bucket_prefix"`
 	OpenAIAPIKey           string `yaml:"openai_api_key"`
 	HealthWaitSeconds      int    `yaml:"health_wait_seconds"`
+}
+
+// Helpper302Config 302Helpper 插件配置。
+type Helpper302Config struct {
+	Enabled             bool   `yaml:"enabled"`
+	BaseURL             string `yaml:"base_url"`
+	Provider            string `yaml:"provider"`
+	ModelName           string `yaml:"model_name"`
+	Mode                string `yaml:"mode"`
+	PollIntervalSeconds int    `yaml:"poll_interval_seconds"`
+	MaxWaitSeconds      int    `yaml:"max_wait_seconds"`
 }
 
 // ImportConfig 导入相关配置。
@@ -137,6 +149,15 @@ func DefaultConfig() *Config {
 			BackgroundBucketPrefix: "images_data/",
 			GeneratedBucketPrefix:  "gyrh_images_data/",
 			HealthWaitSeconds:      15,
+		},
+		Helpper302: Helpper302Config{
+			Enabled:             true,
+			BaseURL:             "https://api.302.ai",
+			Provider:            "302-gpt-image",
+			ModelName:           "gpt-image-2",
+			Mode:                "async",
+			PollIntervalSeconds: 2,
+			MaxWaitSeconds:      300,
 		},
 		Import: ImportConfig{
 			Enabled:             true,
@@ -356,6 +377,36 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.AliOSS.HealthWaitSeconds = value
 	}
 
+	if v := os.Getenv("GYRH_302_HELPER_ENABLED"); v != "" {
+		cfg.Helpper302.Enabled = isTrue(v)
+	}
+	if v := os.Getenv("GYRH_302_HELPER_BASE_URL"); v != "" {
+		cfg.Helpper302.BaseURL = v
+	}
+	if v := os.Getenv("GYRH_302_HELPER_PROVIDER"); v != "" {
+		cfg.Helpper302.Provider = v
+	}
+	if v := os.Getenv("GYRH_302_HELPER_MODEL_NAME"); v != "" {
+		cfg.Helpper302.ModelName = v
+	}
+	if v := os.Getenv("GYRH_302_HELPER_MODE"); v != "" {
+		cfg.Helpper302.Mode = v
+	}
+	if v := os.Getenv("GYRH_302_HELPER_POLL_INTERVAL_SECONDS"); v != "" {
+		value, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("GYRH_302_HELPER_POLL_INTERVAL_SECONDS 无效: %s", v)
+		}
+		cfg.Helpper302.PollIntervalSeconds = value
+	}
+	if v := os.Getenv("GYRH_302_HELPER_MAX_WAIT_SECONDS"); v != "" {
+		value, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("GYRH_302_HELPER_MAX_WAIT_SECONDS 无效: %s", v)
+		}
+		cfg.Helpper302.MaxWaitSeconds = value
+	}
+
 	if v := os.Getenv("GYRH_IMPORT_ENABLED"); v != "" {
 		cfg.Import.Enabled = isTrue(v)
 	}
@@ -479,6 +530,26 @@ func validateConfig(cfg *Config) error {
 		}
 		if strings.TrimSpace(cfg.AliOSS.GeneratedBucketPrefix) == "" {
 			return fmt.Errorf("alioss.generated_bucket_prefix 不能为空")
+		}
+	}
+	if cfg.Helpper302.Enabled {
+		if strings.TrimSpace(cfg.Helpper302.BaseURL) == "" {
+			return fmt.Errorf("helpper302.base_url 不能为空")
+		}
+		if strings.TrimSpace(cfg.Helpper302.Provider) == "" {
+			return fmt.Errorf("helpper302.provider 不能为空")
+		}
+		if strings.TrimSpace(cfg.Helpper302.ModelName) == "" {
+			return fmt.Errorf("helpper302.model_name 不能为空")
+		}
+		if cfg.Helpper302.Mode != "async" && cfg.Helpper302.Mode != "sync" {
+			return fmt.Errorf("helpper302.mode 仅支持 async 或 sync")
+		}
+		if cfg.Helpper302.PollIntervalSeconds <= 0 {
+			cfg.Helpper302.PollIntervalSeconds = 2
+		}
+		if cfg.Helpper302.MaxWaitSeconds <= 0 {
+			cfg.Helpper302.MaxWaitSeconds = 300
 		}
 	}
 	validLevels := map[string]bool{"debug": true, "info": true, "warn": true, "error": true}

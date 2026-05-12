@@ -28,13 +28,17 @@ export async function signRequest(clientIP, publicKey, privateKey) {
   };
 }
 
+export async function getAuthHeaders() {
+  const clientIP = '127.0.0.1';
+  const publicKey = import.meta.env.VITE_GYRH_AUTH_PUBLIC_KEY || 'gyrh_web';
+  const privateKey = import.meta.env.VITE_GYRH_AUTH_PRIVATE_KEY || 'secret';
+
+  return signRequest(clientIP, publicKey, privateKey);
+}
+
 export async function fetchApi(url, options = {}) {
   // In a real app, you might want to get the client IP or let a gateway handle it
-  const clientIP = '127.0.0.1'; // Using loopback or local IP for dev
-  const publicKey = import.meta.env.VITE_GYRH_AUTH_PUBLIC_KEY || 'gyrh_web';
-  const privateKey = import.meta.env.VITE_GYRH_AUTH_PRIVATE_KEY || 'secret'; // fallback for dev if env missing
-
-  const authHeaders = await signRequest(clientIP, publicKey, privateKey);
+  const authHeaders = await getAuthHeaders();
 
   const headers = {
     'Content-Type': 'application/json',

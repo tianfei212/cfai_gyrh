@@ -21,6 +21,8 @@ import (
 	"gyrh-go-v2/backend/internal/logger"
 	"gyrh-go-v2/backend/internal/storage"
 	"gyrh-go-v2/backend/pkg/httpx"
+
+	"github.com/gorilla/mux"
 )
 
 // ImageHandler 图像处理器，提供图像的列表、下载、查看、上传、改写和删除功能
@@ -30,6 +32,8 @@ type ImageHandler struct {
 	stylePromptRepo      *db.StylePromptRepo      // 风格提示词仓库
 	storageService       storage.StorageService   // 存储服务
 	llmService           llm.Service              // 大模型服务
+	rewriteTaskRepo      *db.RewriteTaskRepo      // 异步改写任务仓库
+	rewriteTasks         *rewriteTaskStore        // 异步改写任务
 }
 
 // NewImageHandler 创建图像处理器实例
@@ -39,14 +43,23 @@ func NewImageHandler(
 	stylePromptRepo *db.StylePromptRepo,
 	storageService storage.StorageService,
 	llmService llm.Service,
+	rewriteTaskRepo ...*db.RewriteTaskRepo,
 ) *ImageHandler {
-	return &ImageHandler{
+	var taskRepo *db.RewriteTaskRepo
+	if len(rewriteTaskRepo) > 0 {
+		taskRepo = rewriteTaskRepo[0]
+	}
+	handler := &ImageHandler{
 		imageRepo:            imageRepo,
 		backgroundPromptRepo: backgroundPromptRepo,
 		stylePromptRepo:      stylePromptRepo,
 		storageService:       storageService,
 		llmService:           llmService,
+		rewriteTaskRepo:      taskRepo,
+		rewriteTasks:         newRewriteTaskStore(),
 	}
+	handler.restoreRunningRewriteTasks()
+	return handler
 }
 
 // ListRequest 列表查询请求参数
@@ -421,13 +434,14 @@ type RewriteRequest struct {
 
 // RewriteResponse 图像改写响应结果
 type RewriteResponse struct {
-	Success  bool   `json:"success"`         // 是否成功
-	ID       int64  `json:"id"`              // 图像ID
-	AssetID  string `json:"asset_id"`        // 存储资源ID
-	ImageURL string `json:"image_url"`       // 访问URL
-	Status   string `json:"status"`          // 生成状态
-	Message  string `json:"message"`         // 消息
-	Error    string `json:"error,omitempty"` // 错误信息
+	Success  bool   `json:"success"`           // 是否成功
+	ID       int64  `json:"id"`                // 图像ID
+	AssetID  string `json:"asset_id"`          // 存储资源ID
+	ImageURL string `json:"image_url"`         // 访问URL
+	TaskID   string `json:"task_id,omitempty"` // 异步任务ID
+	Status   string `json:"status"`            // 生成状态
+	Message  string `json:"message"`           // 消息
+	Error    string `json:"error,omitempty"`   // 错误信息
 }
 
 // Rewrite 图像改写（光影融合）
@@ -460,16 +474,13 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	if req.Provider == "" {
 		req.Provider = "google"
 	}
-	if req.Provider != "google" && req.Provider != "wan" {
-		return writeJSONError(w, http.StatusBadRequest, "不支持的模型提供者，仅支持 google 或 wan")
+	if req.Provider != "google" && req.Provider != "wan" && req.Provider != "302-gpt-image" {
+		return writeJSONError(w, http.StatusBadRequest, "不支持的模型提供者，仅支持 google、wan 或 302-gpt-image")
 	}
 
 	stylePrompt := req.effectiveStylePrompt(h.stylePromptRepo)
 	hasBackground := strings.TrimSpace(req.Background) != ""
 
-	if hasBackground && req.BackgroundPromptID <= 0 {
-		return writeJSONError(w, http.StatusBadRequest, "提供背景图时必须同时提供 background_prompt_id")
-	}
 	if !hasBackground && req.BackgroundPromptID > 0 {
 		return writeJSONError(w, http.StatusBadRequest, "未提供背景图时不能传 background_prompt_id")
 	}
@@ -493,6 +504,62 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 		return writeJSONError(w, http.StatusInternalServerError, "LLM 服务未初始化")
 	}
 
+	if req.Provider == "302-gpt-image" {
+		task := h.rewriteTasks.create()
+		if h.rewriteTaskRepo != nil {
+			if err := h.rewriteTaskRepo.Create(db.RewriteTaskCreateInput{
+				TaskID:             task.ID,
+				Provider:           req.Provider,
+				BackgroundPromptID: req.BackgroundPromptID,
+			}); err != nil {
+				logger.Error("创建图像改写任务记录失败: %v", err)
+				return writeJSONError(w, http.StatusInternalServerError, "创建图像改写任务失败")
+			}
+		}
+		started, err := h.llmService.StartCompose(ctx, llm.ComposeParams{
+			Provider:           req.Provider,
+			StylePrompt:        stylePrompt,
+			Images:             inputs,
+			BackgroundPromptID: req.BackgroundPromptID,
+		})
+		if err != nil {
+			if h.rewriteTaskRepo != nil {
+				_ = h.rewriteTaskRepo.Fail(task.ID, err.Error())
+			}
+			h.rewriteTasks.fail(task.ID, err)
+			return writeJSONError(w, http.StatusInternalServerError, "创建 302-gpt-image 任务失败")
+		}
+		if h.rewriteTaskRepo != nil {
+			if err := h.rewriteTaskRepo.SetExternalTaskID(task.ID, started.ExternalTaskID); err != nil {
+				logger.Error("保存 302-gpt-image 外部任务ID失败: %v", err)
+			}
+		}
+		go h.runAsyncRewrite(task.ID, rewriteJob{
+			Request:            req,
+			StylePrompt:        stylePrompt,
+			Inputs:             inputs,
+			BackgroundPromptID: req.BackgroundPromptID,
+			ExternalTaskID:     started.ExternalTaskID,
+		})
+		return writeJSON(w, http.StatusOK, RewriteResponse{
+			Success: true,
+			TaskID:  task.ID,
+			Status:  string(rewriteTaskRunning),
+			Message: "图像改写任务已创建",
+		})
+	}
+
+	resp, err := h.composeAndPersistRewrite(ctx, req, stylePrompt, inputs)
+	if err != nil {
+		if errors.Is(err, llm.ErrBackgroundPromptNotFound) {
+			return writeJSONError(w, http.StatusBadRequest, "背景图提示词模板不存在")
+		}
+		return writeJSONError(w, http.StatusInternalServerError, err.Error())
+	}
+	return writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ImageHandler) composeAndPersistRewrite(ctx context.Context, req RewriteRequest, stylePrompt string, inputs []llm.ImageInput) (RewriteResponse, error) {
 	result, err := h.llmService.Compose(ctx, llm.ComposeParams{
 		Provider:           req.Provider,
 		StylePrompt:        stylePrompt,
@@ -501,30 +568,27 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	})
 	if err != nil {
 		logger.Error("调用模型融合失败: %v", err)
-		if errors.Is(err, llm.ErrBackgroundPromptNotFound) {
-			return writeJSONError(w, http.StatusBadRequest, "背景图提示词模板不存在")
-		}
-		return writeJSONError(w, http.StatusInternalServerError, "模型融合失败")
+		return RewriteResponse{}, err
 	}
 
 	resultData, err := h.resolveComposeResult(ctx, result)
 	if err != nil {
 		logger.Error("解析模型返回结果失败: %v", err)
-		return writeJSONError(w, http.StatusInternalServerError, "解析模型结果失败")
+		return RewriteResponse{}, fmt.Errorf("解析模型结果失败: %w", err)
 	}
 
 	filename := fmt.Sprintf("rewrite_%d.png", time.Now().Unix())
 	assetID, err := h.storageService.SaveWithKind(ctx, resultData, filename, storage.SaveKindGenerated)
 	if err != nil {
 		logger.Error("保存改写图像失败: %v", err)
-		return writeJSONError(w, http.StatusInternalServerError, "保存改写图像失败")
+		return RewriteResponse{}, fmt.Errorf("保存改写图像失败: %w", err)
 	}
 
 	// 生成访问 URL
 	imageURL, err := h.storageService.GetImageURL(ctx, assetID)
 	if err != nil {
 		logger.Error("生成访问 URL 失败: %v", err)
-		return writeJSONError(w, http.StatusInternalServerError, "生成访问 URL 失败")
+		return RewriteResponse{}, fmt.Errorf("生成访问 URL 失败: %w", err)
 	}
 
 	// 保存到数据库
@@ -549,19 +613,208 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	if err != nil {
 		logger.Error("创建数据库记录失败: %v", err)
 		_ = h.storageService.Delete(ctx, assetID)
-		return writeJSONError(w, http.StatusInternalServerError, "创建图像记录失败")
+		return RewriteResponse{}, fmt.Errorf("创建图像记录失败: %w", err)
 	}
 
 	logger.Info("图像改写成功: id=%d, asset_id=%s, provider=%s", imageID, assetID, req.Provider)
 
-	return writeJSON(w, http.StatusOK, RewriteResponse{
+	return RewriteResponse{
 		Success:  true,
 		ID:       imageID,
 		AssetID:  assetID,
 		ImageURL: imageURL,
 		Status:   normalizeRewriteStatus(result.Status),
 		Message:  "图像改写成功",
+	}, nil
+}
+
+func (h *ImageHandler) waitAndPersistRewrite(ctx context.Context, job rewriteJob) (RewriteResponse, error) {
+	if job.ExternalTaskID == "" {
+		return h.composeAndPersistRewrite(ctx, job.Request, job.StylePrompt, job.Inputs)
+	}
+	result, err := h.llmService.WaitComposeResult(ctx, job.Request.Provider, job.ExternalTaskID)
+	if err != nil {
+		return RewriteResponse{}, err
+	}
+	return h.persistComposeResult(ctx, job.Request, result)
+}
+
+func (h *ImageHandler) persistComposeResult(ctx context.Context, req RewriteRequest, result *llm.ComposeResult) (RewriteResponse, error) {
+	resultData, err := h.resolveComposeResult(ctx, result)
+	if err != nil {
+		logger.Error("解析模型返回结果失败: %v", err)
+		return RewriteResponse{}, fmt.Errorf("解析模型结果失败: %w", err)
+	}
+
+	filename := fmt.Sprintf("rewrite_%d.png", time.Now().Unix())
+	assetID, err := h.storageService.SaveWithKind(ctx, resultData, filename, storage.SaveKindGenerated)
+	if err != nil {
+		logger.Error("保存改写图像失败: %v", err)
+		return RewriteResponse{}, fmt.Errorf("保存改写图像失败: %w", err)
+	}
+
+	imageURL, err := h.storageService.GetImageURL(ctx, assetID)
+	if err != nil {
+		logger.Error("生成访问 URL 失败: %v", err)
+		return RewriteResponse{}, fmt.Errorf("生成访问 URL 失败: %w", err)
+	}
+
+	name := fmt.Sprintf("rewrite_%d", time.Now().Unix())
+	imageWidth, imageHeight, err := decodeStoredImageSize(resultData)
+	if err != nil {
+		logger.Warn("解析生成图像尺寸失败: %v", err)
+	}
+
+	imageID, err := h.imageRepo.Create(db.GeneratedImageCreateInput{
+		Name:               name,
+		Path:               assetID,
+		AssetID:            assetID,
+		IsUpscale:          false,
+		StyleTransform:     req.Provider,
+		Provider:           req.Provider,
+		Status:             normalizeRewriteStatus(result.Status),
+		BackgroundPromptID: req.BackgroundPromptID,
+		ImageWidth:         imageWidth,
+		ImageHeight:        imageHeight,
 	})
+	if err != nil {
+		logger.Error("创建数据库记录失败: %v", err)
+		_ = h.storageService.Delete(ctx, assetID)
+		return RewriteResponse{}, fmt.Errorf("创建图像记录失败: %w", err)
+	}
+
+	logger.Info("图像改写成功: id=%d, asset_id=%s, provider=%s", imageID, assetID, req.Provider)
+	return RewriteResponse{
+		Success:  true,
+		ID:       imageID,
+		AssetID:  assetID,
+		ImageURL: imageURL,
+		Status:   normalizeRewriteStatus(result.Status),
+		Message:  "图像改写成功",
+	}, nil
+}
+
+// RewriteTask 查询异步图像改写任务状态。
+// GET /images/rewrite/tasks/{id}
+func (h *ImageHandler) RewriteTask(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	taskID := strings.TrimSpace(mux.Vars(r)["id"])
+	if taskID == "" {
+		return writeJSONError(w, http.StatusBadRequest, "缺少任务ID")
+	}
+	task, ok := h.rewriteTasks.snapshot(taskID)
+	if !ok {
+		if h.rewriteTaskRepo == nil {
+			return writeJSONError(w, http.StatusNotFound, "任务不存在")
+		}
+		persisted, err := h.rewriteTaskRepo.Get(taskID)
+		if err != nil {
+			return writeJSONError(w, http.StatusNotFound, "任务不存在")
+		}
+		task, _ = h.restoreRewriteTaskFromDB(persisted.TaskID)
+	}
+	return writeJSON(w, http.StatusOK, task)
+}
+
+// RewriteTaskEvents 订阅异步图像改写任务结果。
+// GET /images/rewrite/tasks/{id}/events
+func (h *ImageHandler) RewriteTaskEvents(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+	taskID := strings.TrimSpace(mux.Vars(r)["id"])
+	if taskID == "" {
+		return writeJSONError(w, http.StatusBadRequest, "缺少任务ID")
+	}
+	done, ok := h.rewriteTasks.doneChan(taskID)
+	if !ok {
+		if _, err := h.restoreRewriteTaskFromDB(taskID); err != nil {
+			return writeJSONError(w, http.StatusNotFound, "任务不存在")
+		}
+		done, ok = h.rewriteTasks.doneChan(taskID)
+		if !ok {
+			return writeJSONError(w, http.StatusNotFound, "任务不存在")
+		}
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return writeJSONError(w, http.StatusInternalServerError, "当前连接不支持事件流")
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	if task, ok := h.rewriteTasks.snapshot(taskID); ok {
+		writeSSEEvent(w, "status", task)
+	}
+	flusher.Flush()
+
+	select {
+	case <-done:
+		if task, ok := h.rewriteTasks.snapshot(taskID); ok {
+			writeSSEEvent(w, "complete", task)
+		}
+		flusher.Flush()
+	case <-ctx.Done():
+		return nil
+	}
+	return nil
+}
+
+func (h *ImageHandler) restoreRewriteTaskFromDB(taskID string) (rewriteTask, error) {
+	if h.rewriteTaskRepo == nil {
+		return rewriteTask{}, fmt.Errorf("任务不存在")
+	}
+	persisted, err := h.rewriteTaskRepo.Get(taskID)
+	if err != nil {
+		return rewriteTask{}, err
+	}
+	task := rewriteTaskFromDB(persisted)
+	if persisted.Status == db.RewriteTaskStatusRunning && persisted.ExternalTaskID != "" {
+		if h.restoreRunningRewriteTask(persisted) {
+			return task, nil
+		}
+	} else {
+		h.rewriteTasks.restore(task)
+	}
+	return task, nil
+}
+
+func (h *ImageHandler) restoreRunningRewriteTasks() {
+	if h.rewriteTaskRepo == nil || h.llmService == nil {
+		return
+	}
+	tasks, err := h.rewriteTaskRepo.ListRunningWithExternalTaskIDs()
+	if err != nil {
+		logger.Error("恢复运行中的图像改写任务失败: %v", err)
+		return
+	}
+	for _, task := range tasks {
+		h.restoreRunningRewriteTask(task)
+	}
+	if len(tasks) > 0 {
+		logger.Info("已恢复运行中的图像改写任务: count=%d", len(tasks))
+	}
+}
+
+func (h *ImageHandler) restoreRunningRewriteTask(persisted *db.RewriteTask) bool {
+	if persisted == nil || persisted.Status != db.RewriteTaskStatusRunning || persisted.ExternalTaskID == "" {
+		return false
+	}
+	if h.llmService == nil {
+		h.rewriteTasks.restore(rewriteTaskFromDB(persisted))
+		return false
+	}
+	if _, exists := h.rewriteTasks.get(persisted.TaskID); exists {
+		return true
+	}
+	h.rewriteTasks.restore(rewriteTaskFromDB(persisted))
+	go h.runAsyncRewrite(persisted.TaskID, rewriteJob{
+		Request: RewriteRequest{
+			Provider:           persisted.Provider,
+			BackgroundPromptID: persisted.BackgroundPromptID,
+		},
+		ExternalTaskID: persisted.ExternalTaskID,
+	})
+	logger.Info("恢复运行中的图像改写任务: task_id=%s, external_task_id=%s", persisted.TaskID, persisted.ExternalTaskID)
+	return true
 }
 
 func (r RewriteRequest) effectiveStylePrompt(repo *db.StylePromptRepo) string {

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
 import { DownloadIcon, XIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
+import { resolveRewriteResponse } from '../services/rewriteTask';
+import { getProviderForModel } from '../utils/modelProvider';
 
 export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, previewMode = 'compare', onPreview }) {
   const [showQR, setShowQR] = useState(false);
@@ -52,7 +54,7 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     try {
       const payload = {
         style_prompt_id: styleId,
-        provider: model === 'W' ? 'wan' : 'google'
+        provider: getProviderForModel(model)
       };
 
       // 优先判断是否已经是后端的图片（提取 asset_id）
@@ -99,10 +101,11 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
         foreground: isLocalBase64 ? 'base64_data_omitted' : undefined 
       });
 
-      const data = await fetchApi('/api/v1/images/rewrite', {
+      const rewriteData = await fetchApi('/api/v1/images/rewrite', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
+      const data = await resolveRewriteResponse(rewriteData);
       console.log('Rewrite response:', data);
 
       if (data && data.image_url) {

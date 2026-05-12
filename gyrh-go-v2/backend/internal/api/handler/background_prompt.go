@@ -11,6 +11,8 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +39,37 @@ func NewBackgroundPromptHandler(repo *db.BackgroundPromptRepo, storageService st
 		storageService: storageService,
 		qwenAdvisor:    qwenAdvisor,
 	}
+}
+
+type remoteSyncRequest struct {
+	APIURL string `json:"api_url"`
+}
+
+type remoteMediaResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
+		Items []remoteMediaItem `json:"items"`
+	} `json:"data"`
+}
+
+type remoteMediaItem struct {
+	ID         string `json:"id"`
+	URL        string `json:"url"`
+	Dimensions string `json:"dimensions"`
+	Prompt     string `json:"prompt"`
+}
+
+type remoteSyncFailure struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+type remoteSyncResult struct {
+	Imported int                 `json:"imported"`
+	Skipped  int                 `json:"skipped"`
+	Failed   int                 `json:"failed"`
+	Failures []remoteSyncFailure `json:"failures"`
 }
 
 // List 返回背景图提示词模板列表。
@@ -97,6 +130,10 @@ func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request)
 		WanNegativePrompt      string `json:"wan_negative_prompt"`
 		WanPromptZH            string `json:"wan_prompt_zh"`
 		WanNegativePromptZH    string `json:"wan_negative_prompt_zh"`
+		GPTPrompt              string `json:"gpt_prompt"`
+		GPTNegativePrompt      string `json:"gpt_negative_prompt"`
+		GPTPromptZH            string `json:"gpt_prompt_zh"`
+		GPTNegativePromptZH    string `json:"gpt_negative_prompt_zh"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "请求体格式错误"))
@@ -108,8 +145,8 @@ func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request)
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "name 不能为空"))
 		return
 	}
-	if strings.TrimSpace(req.GeminiPrompt) == "" && strings.TrimSpace(req.WanPrompt) == "" {
-		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "gemini_prompt 和 wan_prompt 不能同时为空"))
+	if strings.TrimSpace(req.GeminiPrompt) == "" && strings.TrimSpace(req.WanPrompt) == "" && strings.TrimSpace(req.GPTPrompt) == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "gemini_prompt、wan_prompt 和 gpt_prompt 不能同时为空"))
 		return
 	}
 	if _, err := h.repo.GetByName(req.Name); err == nil {
@@ -127,6 +164,10 @@ func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request)
 		req.WanNegativePrompt,
 		req.WanPromptZH,
 		req.WanNegativePromptZH,
+		req.GPTPrompt,
+		req.GPTNegativePrompt,
+		req.GPTPromptZH,
+		req.GPTNegativePromptZH,
 		"",
 		"",
 		0,
@@ -164,6 +205,10 @@ func (h *BackgroundPromptHandler) Update(w http.ResponseWriter, r *http.Request)
 		WanNegativePrompt      *string `json:"wan_negative_prompt"`
 		WanPromptZH            *string `json:"wan_prompt_zh"`
 		WanNegativePromptZH    *string `json:"wan_negative_prompt_zh"`
+		GPTPrompt              *string `json:"gpt_prompt"`
+		GPTNegativePrompt      *string `json:"gpt_negative_prompt"`
+		GPTPromptZH            *string `json:"gpt_prompt_zh"`
+		GPTNegativePromptZH    *string `json:"gpt_negative_prompt_zh"`
 	}
 	if decodeErr := json.NewDecoder(r.Body).Decode(&req); decodeErr != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "请求体格式错误"))
@@ -197,6 +242,10 @@ func (h *BackgroundPromptHandler) Update(w http.ResponseWriter, r *http.Request)
 		WanNegativePrompt:      req.WanNegativePrompt,
 		WanPromptZH:            req.WanPromptZH,
 		WanNegativePromptZH:    req.WanNegativePromptZH,
+		GPTPrompt:              req.GPTPrompt,
+		GPTNegativePrompt:      req.GPTNegativePrompt,
+		GPTPromptZH:            req.GPTPromptZH,
+		GPTNegativePromptZH:    req.GPTNegativePromptZH,
 	}
 	if err := h.repo.Update(id, patch); err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "更新背景图提示词模板失败"))
@@ -342,6 +391,10 @@ func (h *BackgroundPromptHandler) Import(w http.ResponseWriter, r *http.Request)
 		result.WanNegativePromptEN,
 		result.WanPromptZH,
 		result.WanNegativePromptZH,
+		result.GPTPromptEN,
+		result.GPTNegativePromptEN,
+		result.GPTPromptZH,
+		result.GPTNegativePromptZH,
 		assetID,
 		"", // 不在数据库中保存临时 OSS URL，读取时动态获取
 		imageWidth,
@@ -365,6 +418,35 @@ func (h *BackgroundPromptHandler) Import(w http.ResponseWriter, r *http.Request)
 	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toBackgroundPromptItem(r.Context(), item)))
 }
 
+// SyncRemote 同步远端图库当前页背景图，不触发提示词反推。
+func (h *BackgroundPromptHandler) SyncRemote(w http.ResponseWriter, r *http.Request) {
+	if h.storageService == nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "存储服务未初始化"))
+		return
+	}
+
+	var req remoteSyncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "请求体格式错误"))
+		return
+	}
+
+	apiURL := strings.TrimSpace(req.APIURL)
+	if err := validateRemoteAPIURL(apiURL); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, err.Error()))
+		return
+	}
+
+	remoteResp, err := fetchRemoteMedia(r.Context(), apiURL)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadGateway, httpx.Error(1, err.Error()))
+		return
+	}
+
+	result := h.importRemoteMediaItems(r.Context(), apiURL, remoteResp.Data.Items)
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(result))
+}
+
 // SyncEnglish 根据中文提示词同步英文版本。
 func (h *BackgroundPromptHandler) SyncEnglish(w http.ResponseWriter, r *http.Request) {
 	if h.qwenAdvisor == nil {
@@ -381,7 +463,9 @@ func (h *BackgroundPromptHandler) SyncEnglish(w http.ResponseWriter, r *http.Req
 	if strings.TrimSpace(req.GeminiPromptZH) == "" &&
 		strings.TrimSpace(req.GeminiNegativePromptZH) == "" &&
 		strings.TrimSpace(req.WanPromptZH) == "" &&
-		strings.TrimSpace(req.WanNegativePromptZH) == "" {
+		strings.TrimSpace(req.WanNegativePromptZH) == "" &&
+		strings.TrimSpace(req.GPTPromptZH) == "" &&
+		strings.TrimSpace(req.GPTNegativePromptZH) == "" {
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "至少需要提供一项中文提示词"))
 		return
 	}
@@ -414,6 +498,10 @@ func (h *BackgroundPromptHandler) toBackgroundPromptItem(ctx context.Context, it
 		"wan_negative_prompt":       item.WanNegativePrompt,
 		"wan_prompt_zh":             item.WanPromptZH,
 		"wan_negative_prompt_zh":    item.WanNegativePromptZH,
+		"gpt_prompt":                item.GPTPrompt,
+		"gpt_negative_prompt":       item.GPTNegativePrompt,
+		"gpt_prompt_zh":             item.GPTPromptZH,
+		"gpt_negative_prompt_zh":    item.GPTNegativePromptZH,
 		"image_asset_id":            item.ImageAssetID,
 		"image_url":                 imageURL,
 		"image_width":               item.ImageWidth,
@@ -453,4 +541,194 @@ func (h *BackgroundPromptHandler) resolveBackgroundAssetID(ctx context.Context, 
 		_ = h.storageService.Delete(context.Background(), assetID)
 	}
 	return assetID, cleanup, nil
+}
+
+func validateRemoteAPIURL(apiURL string) error {
+	if strings.TrimSpace(apiURL) == "" {
+		return fmt.Errorf("api_url 不能为空")
+	}
+	parsed, err := url.Parse(apiURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("api_url 不是合法 URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("api_url 只支持 http/https")
+	}
+	return nil
+}
+
+func fetchRemoteMedia(ctx context.Context, apiURL string) (*remoteMediaResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建远端图库请求失败")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求远端图库失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("远端图库状态码异常: %d", resp.StatusCode)
+	}
+
+	var remoteResp remoteMediaResponse
+	if err := json.NewDecoder(resp.Body).Decode(&remoteResp); err != nil {
+		return nil, fmt.Errorf("解析远端图库响应失败")
+	}
+	return &remoteResp, nil
+}
+
+func (h *BackgroundPromptHandler) importRemoteMediaItems(ctx context.Context, apiURL string, items []remoteMediaItem) remoteSyncResult {
+	result := remoteSyncResult{
+		Failures: []remoteSyncFailure{},
+	}
+
+	for _, item := range items {
+		remoteID := strings.TrimSpace(item.ID)
+		if remoteID == "" {
+			result.Failed++
+			result.Failures = append(result.Failures, remoteSyncFailure{ID: "", Reason: "远端 id 为空"})
+			continue
+		}
+
+		name := "remote:" + remoteID
+		if _, err := h.repo.GetByName(name); err == nil {
+			result.Skipped++
+			continue
+		}
+
+		if err := h.importRemoteMediaItem(ctx, apiURL, name, item); err != nil {
+			result.Failed++
+			result.Failures = append(result.Failures, remoteSyncFailure{ID: remoteID, Reason: err.Error()})
+			continue
+		}
+		result.Imported++
+	}
+
+	return result
+}
+
+func (h *BackgroundPromptHandler) importRemoteMediaItem(ctx context.Context, apiURL string, name string, item remoteMediaItem) error {
+	imageURL, err := resolveRemoteMediaURL(apiURL, item.URL)
+	if err != nil {
+		return err
+	}
+
+	imageData, err := downloadRemoteImage(ctx, imageURL)
+	if err != nil {
+		return err
+	}
+
+	imageWidth, imageHeight, decodeErr := decodeImageSize(imageData)
+	if decodeErr != nil {
+		imageWidth, imageHeight = parseRemoteDimensions(item.Dimensions)
+		if imageWidth == 0 || imageHeight == 0 {
+			return fmt.Errorf("远端图片不是合法图片数据")
+		}
+	}
+
+	assetID, err := h.storageService.SaveWithKind(ctx, imageData, fmt.Sprintf("remote_bg_%s.png", sanitizeRemoteID(item.ID)), storage.SaveKindAsset)
+	if err != nil {
+		return fmt.Errorf("保存背景图失败")
+	}
+
+	prompt := strings.TrimSpace(item.Prompt)
+	if _, err := h.repo.Create(
+		name,
+		"",
+		"",
+		prompt,
+		"",
+		"",
+		"",
+		prompt,
+		"",
+		"",
+		"",
+		prompt,
+		"",
+		assetID,
+		"",
+		imageWidth,
+		imageHeight,
+	); err != nil {
+		_ = h.storageService.Delete(context.Background(), assetID)
+		return fmt.Errorf("保存背景图记录失败")
+	}
+
+	return nil
+}
+
+func downloadRemoteImage(ctx context.Context, imageURL string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建远端图片请求失败")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("下载远端图片失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("远端图片状态码异常: %d", resp.StatusCode)
+	}
+
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(resp.Body); err != nil {
+		return nil, fmt.Errorf("读取远端图片失败")
+	}
+	return buf.Bytes(), nil
+}
+
+func resolveRemoteMediaURL(apiURL string, mediaURL string) (string, error) {
+	mediaURL = strings.TrimSpace(mediaURL)
+	if mediaURL == "" {
+		return "", fmt.Errorf("远端图片 URL 为空")
+	}
+
+	parsedMedia, err := url.Parse(mediaURL)
+	if err != nil {
+		return "", fmt.Errorf("远端图片 URL 无效")
+	}
+	if parsedMedia.IsAbs() {
+		if parsedMedia.Scheme != "http" && parsedMedia.Scheme != "https" {
+			return "", fmt.Errorf("远端图片 URL 只支持 http/https")
+		}
+		return parsedMedia.String(), nil
+	}
+
+	parsedAPI, err := url.Parse(strings.TrimSpace(apiURL))
+	if err != nil || parsedAPI.Scheme == "" || parsedAPI.Host == "" {
+		return "", fmt.Errorf("远端 API URL 无效")
+	}
+	if parsedAPI.Scheme != "http" && parsedAPI.Scheme != "https" {
+		return "", fmt.Errorf("远端 API URL 只支持 http/https")
+	}
+
+	return parsedAPI.ResolveReference(parsedMedia).String(), nil
+}
+
+func parseRemoteDimensions(dimensions string) (int, int) {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(dimensions)), "x")
+	if len(parts) != 2 {
+		return 0, 0
+	}
+
+	width, widthErr := strconv.Atoi(strings.TrimSpace(parts[0]))
+	height, heightErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+		return 0, 0
+	}
+	return width, height
+}
+
+func sanitizeRemoteID(id string) string {
+	replacer := strings.NewReplacer("/", "_", "\\", "_", ":", "_", "?", "_", "&", "_", "=", "_")
+	cleaned := strings.TrimSpace(replacer.Replace(id))
+	if cleaned == "" {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return cleaned
 }

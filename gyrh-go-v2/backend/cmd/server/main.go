@@ -76,6 +76,7 @@ func main() {
 	llmPromptTemplateRepo := db.NewLLMPromptTemplateRepo(database)
 	backgroundPromptRepo := db.NewBackgroundPromptRepo(database)
 	stylePromptRepo := db.NewStylePromptRepo(database)
+	rewriteTaskRepo := db.NewRewriteTaskRepo(database)
 
 	if seedErr := qwen.EnsureDefaultTemplates(llmPromptTemplateRepo, cfg.Skill.LocalPath); seedErr != nil {
 		logger.Fatal("初始化 Qwen 默认 Prompt 模板失败: %v", seedErr)
@@ -96,7 +97,7 @@ func main() {
 	}
 	bootstrapService.StartWatchers(ctx)
 
-	imageHandler := handler.NewImageHandler(imageRepo, backgroundPromptRepo, stylePromptRepo, storageService, llmService)
+	imageHandler := handler.NewImageHandler(imageRepo, backgroundPromptRepo, stylePromptRepo, storageService, llmService, rewriteTaskRepo)
 	referenceHandler := handler.NewReferenceHandler(referenceRepo, storageService)
 	skillHandler := handler.NewSkillHandler(skillRepo)
 	llmPromptTemplateHandler := handler.NewLLMPromptTemplateHandler(llmPromptTemplateRepo)
@@ -131,7 +132,11 @@ func main() {
 	waitForShutdown(ctx, cancel, server, aliOSSManager, generatedOSSManager)
 }
 
-func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *http.Server, managers ...*oss.Manager) {
+type stoppableManager interface {
+	Stop(ctx context.Context) error
+}
+
+func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *http.Server, managers ...stoppableManager) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
@@ -149,7 +154,7 @@ func waitForShutdown(ctx context.Context, cancel context.CancelFunc, server *htt
 			continue
 		}
 		if err := manager.Stop(shutdownCtx); err != nil {
-			logger.Error("关闭 aliOSS 服务失败: %v", err)
+			logger.Error("关闭外部服务失败: %v", err)
 		}
 	}
 

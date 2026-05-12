@@ -42,6 +42,8 @@ func RegisterRoutes(
 	protected.Handle("/images", adaptErr(imageHandler.List)).Methods(http.MethodGet)
 	protected.Handle("/images/upload", adaptErr(imageHandler.Upload)).Methods(http.MethodPost)
 	protected.Handle("/images/rewrite", adaptErr(imageHandler.Rewrite)).Methods(http.MethodPost)
+	protected.Handle("/images/rewrite/tasks/{id}", adaptErr(imageHandler.RewriteTask)).Methods(http.MethodGet)
+	protected.Handle("/images/rewrite/tasks/{id}/events", adaptErr(imageHandler.RewriteTaskEvents)).Methods(http.MethodGet)
 	protected.Handle("/images", adaptErr(imageHandler.Delete)).Methods(http.MethodDelete)
 
 	protected.HandleFunc("/references", referenceHandler.List).Methods(http.MethodGet)
@@ -65,6 +67,7 @@ func RegisterRoutes(
 	protected.HandleFunc("/background-prompts", backgroundPromptHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/background-prompts/import", backgroundPromptHandler.Import).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/suggest-defaults", backgroundPromptHandler.SuggestDefaults).Methods(http.MethodPost)
+	protected.HandleFunc("/background-prompts/sync-remote", backgroundPromptHandler.SyncRemote).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/sync-english", backgroundPromptHandler.SyncEnglish).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Get).Methods(http.MethodGet)
 	protected.HandleFunc("/background-prompts", backgroundPromptHandler.Create).Methods(http.MethodPost)

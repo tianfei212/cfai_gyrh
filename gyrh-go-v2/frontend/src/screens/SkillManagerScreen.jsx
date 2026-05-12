@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
 import { fetchApi } from '../services/api';
 
+const SKILL_PROVIDER_OPTIONS = [
+  { value: 'wan', label: 'Wan' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'qwen', label: 'Qwen' },
+  { value: '302-gpt-image', label: '302 GPT Image' },
+];
+
 function SkillEditModal({ item, onClose, onSaved }) {
   const isNew = !item.id;
   const [saving, setSaving] = useState(false);
@@ -93,9 +100,9 @@ function SkillEditModal({ item, onClose, onSaved }) {
                   onChange={(e) => handleChange('provider', e.target.value)}
                   style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px' }}
                 >
-                  <option value="wan">Wan</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="qwen">Qwen</option>
+                  {SKILL_PROVIDER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -204,9 +211,9 @@ export function SkillManagerScreen({ onHome, onHistory, onLogout, onToggleModel,
               style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '4px', outline: 'none' }}
             >
               <option value="">全部 Provider</option>
-              <option value="wan">Wan</option>
-              <option value="gemini">Gemini</option>
-              <option value="qwen">Qwen</option>
+              {SKILL_PROVIDER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
             <button className="tiny-chip active" type="button" onClick={() => setEditingItem({ provider: filterProvider || 'wan' })}>
               + 新建

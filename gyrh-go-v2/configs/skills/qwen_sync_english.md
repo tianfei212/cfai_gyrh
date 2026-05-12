@@ -2,7 +2,7 @@
 
 要求：
 - 保持原意，不扩写业务之外的信息。
-- 语气紧凑，适合 Gemini/Wan 图像模型。
+- 语气紧凑，适合 Gemini/Wan/GPT Image 图像模型。
 - 对应中文为空时，英文也返回空字符串。
 - 只返回 JSON，禁止 markdown、禁止额外解释。
 
@@ -11,5 +11,7 @@
   "gemini_prompt_en": "",
   "gemini_negative_prompt_en": "",
   "wan_prompt_en": "",
-  "wan_negative_prompt_en": ""
+  "wan_negative_prompt_en": "",
+  "gpt_prompt_en": "",
+  "gpt_negative_prompt_en": ""
 }

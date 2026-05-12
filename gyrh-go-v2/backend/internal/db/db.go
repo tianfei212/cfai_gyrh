@@ -91,6 +91,25 @@ func migrateTables(db *sql.DB) error {
 	_, _ = db.Exec("ALTER TABLE generated_images ADD COLUMN image_width INTEGER NOT NULL DEFAULT 0")
 	_, _ = db.Exec("ALTER TABLE generated_images ADD COLUMN image_height INTEGER NOT NULL DEFAULT 0")
 
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS image_rewrite_tasks (
+			task_id TEXT PRIMARY KEY,
+			external_task_id TEXT NOT NULL DEFAULT '',
+			provider TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'running',
+			background_prompt_id INTEGER NOT NULL DEFAULT 0,
+			image_id INTEGER NOT NULL DEFAULT 0,
+			asset_id TEXT NOT NULL DEFAULT '',
+			image_url TEXT NOT NULL DEFAULT '',
+			error TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建 image_rewrite_tasks 表失败: %w", err)
+	}
+
 	// 创建 reference_images 表（参考图像记录）
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS reference_images (
@@ -130,6 +149,8 @@ func migrateTables(db *sql.DB) error {
 			gemini_negative_prompt TEXT NOT NULL DEFAULT '',
 			wan_prompt TEXT NOT NULL DEFAULT '',
 			wan_negative_prompt TEXT NOT NULL DEFAULT '',
+			gpt_prompt TEXT NOT NULL DEFAULT '',
+			gpt_negative_prompt TEXT NOT NULL DEFAULT '',
 			image_asset_id TEXT NOT NULL DEFAULT '',
 			image_url TEXT NOT NULL DEFAULT '',
 			image_width INTEGER NOT NULL DEFAULT 0,
@@ -151,6 +172,10 @@ func migrateTables(db *sql.DB) error {
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gemini_negative_prompt_zh TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN wan_prompt_zh TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN wan_negative_prompt_zh TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gpt_prompt TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gpt_negative_prompt TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gpt_prompt_zh TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gpt_negative_prompt_zh TEXT NOT NULL DEFAULT ''")
 
 	// 创建 llm_prompt_templates 表（大模型提示词模板）
 	_, err = db.Exec(`

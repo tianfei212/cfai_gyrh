@@ -43,6 +43,10 @@ type SuggestionResult struct {
 	WanPromptEN            string `json:"wan_prompt_en"`
 	WanNegativePromptZH    string `json:"wan_negative_prompt_zh"`
 	WanNegativePromptEN    string `json:"wan_negative_prompt_en"`
+	GPTPromptZH            string `json:"gpt_prompt_zh"`
+	GPTPromptEN            string `json:"gpt_prompt_en"`
+	GPTNegativePromptZH    string `json:"gpt_negative_prompt_zh"`
+	GPTNegativePromptEN    string `json:"gpt_negative_prompt_en"`
 }
 
 // SyncEnglishInput 表示需要同步成英文的中文提示词。
@@ -51,6 +55,8 @@ type SyncEnglishInput struct {
 	GeminiNegativePromptZH string `json:"gemini_negative_prompt_zh"`
 	WanPromptZH            string `json:"wan_prompt_zh"`
 	WanNegativePromptZH    string `json:"wan_negative_prompt_zh"`
+	GPTPromptZH            string `json:"gpt_prompt_zh"`
+	GPTNegativePromptZH    string `json:"gpt_negative_prompt_zh"`
 }
 
 // SyncEnglishResult 表示同步后的英文提示词。
@@ -59,6 +65,8 @@ type SyncEnglishResult struct {
 	GeminiNegativePromptEN string `json:"gemini_negative_prompt_en"`
 	WanPromptEN            string `json:"wan_prompt_en"`
 	WanNegativePromptEN    string `json:"wan_negative_prompt_en"`
+	GPTPromptEN            string `json:"gpt_prompt_en"`
+	GPTNegativePromptEN    string `json:"gpt_negative_prompt_en"`
 }
 
 type chatCompletionRequest struct {

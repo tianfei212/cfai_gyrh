@@ -3,11 +3,13 @@ import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 import { SimpleFrame } from '../components/Layout';
 import { CameraIcon, ClockIcon } from '../components/Icons';
 import { fetchApi } from '../services/api';
+import { resolveRewriteResponse } from '../services/rewriteTask';
 import {
   getCameraScaleFromZoomOffset,
   getCenteredZoomCrop,
   getHorizontalMirrorTransform,
 } from '../utils/cameraZoom';
+import { getProviderForModel } from '../utils/modelProvider';
 
 export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, model, selectedBg, onPreview }) {
   const videoRef = useRef(null);
@@ -185,48 +187,50 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     let backgroundBase64 = null;
     let backgroundPromptId = 0;
 
-    if (selectedBg) {
-      try {
-        if (typeof selectedBg === 'object' && selectedBg.image_url) {
-          backgroundPromptId = selectedBg.id;
-          const res = await fetch(selectedBg.image_url);
-          const blob = await res.blob();
-          backgroundBase64 = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result.split(',')[1]);
-            reader.readAsDataURL(blob);
-          });
-        } else if (typeof selectedBg === 'string' && (selectedBg.startsWith('blob:') || selectedBg.startsWith('http'))) {
-          // Local loaded image (blob) or remote URL
-          backgroundPromptId = 1; // Default fallback for local image
-          const res = await fetch(selectedBg);
-          const blob = await res.blob();
-          backgroundBase64 = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result.split(',')[1]);
-            reader.readAsDataURL(blob);
-          });
-        }
-      } catch (err) {
-        console.error('Failed to process background image:', err);
-      }
-    }
-
     try {
+      if (selectedBg) {
+        try {
+          if (typeof selectedBg === 'object' && selectedBg.image_url) {
+            backgroundPromptId = selectedBg.id;
+            const res = await fetch(selectedBg.image_url);
+            const blob = await res.blob();
+            backgroundBase64 = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result.split(',')[1]);
+              reader.readAsDataURL(blob);
+            });
+          } else if (typeof selectedBg === 'string' && (selectedBg.startsWith('blob:') || selectedBg.startsWith('http'))) {
+            const res = await fetch(selectedBg);
+            const blob = await res.blob();
+            backgroundBase64 = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result.split(',')[1]);
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch (err) {
+          console.error('Failed to process background image:', err);
+          throw new Error('背景图处理失败，请重新上传背景图。');
+        }
+      }
+
       const payload = {
         foreground: foregroundBase64,
-        provider: model === 'W' ? 'wan' : 'google'
+        provider: getProviderForModel(model)
       };
 
       if (backgroundBase64) {
         payload.background = backgroundBase64;
-        payload.background_prompt_id = backgroundPromptId;
+        if (backgroundPromptId > 0) {
+          payload.background_prompt_id = backgroundPromptId;
+        }
       }
 
-      const data = await fetchApi('/api/v1/images/rewrite', {
+      const rewriteData = await fetchApi('/api/v1/images/rewrite', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
+      const data = await resolveRewriteResponse(rewriteData);
 
       sessionStorage.removeItem('mattedImage');
       

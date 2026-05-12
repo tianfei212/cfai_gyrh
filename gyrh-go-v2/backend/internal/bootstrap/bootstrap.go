@@ -22,6 +22,8 @@ type Service struct {
 	storageService storage.StorageService
 }
 
+var defaultSkillProviders = []string{"google", "wan", "302-gpt-image"}
+
 // New 创建启动服务。
 func New(cfg *config.Config, skillRepo *db.SkillRepo, imageRepo *db.ImageRepo, storageService storage.StorageService) *Service {
 	return &Service{
@@ -70,7 +72,7 @@ func (s *Service) StartWatchers(ctx context.Context) {
 }
 
 func (s *Service) seedSkills() error {
-	for _, provider := range []string{"google", "wan"} {
+	for _, provider := range defaultSkillProviders {
 		path, err := resolveSkillFilePath(s.cfg.Skill.LocalPath, provider)
 		if err != nil {
 			return err
@@ -88,7 +90,7 @@ func (s *Service) seedSkills() error {
 }
 
 func (s *Service) reloadSkills() error {
-	for _, provider := range []string{"google", "wan"} {
+	for _, provider := range defaultSkillProviders {
 		if err := s.skillRepo.DeleteByProvider(provider); err != nil {
 			return err
 		}
