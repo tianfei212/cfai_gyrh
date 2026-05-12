@@ -25,7 +25,7 @@
 - 执行者：人工 / Claude <模型名>（<model-string>，Anthropic）
 - 文件清单：
   - `path/to/file`
-- commit hash：未提交，提交后补充
+- commit hash：`8a96175`
 ```
 
 ## 2026-05-12 16:37 UTC+8
