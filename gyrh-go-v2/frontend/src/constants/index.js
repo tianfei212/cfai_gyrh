@@ -1,4 +1,4 @@
-export const screens = [
+export const adminScreens = [
   { key: 'dashboard', label: '工作台', icon: 'HomeIcon' },
   { key: 'history', label: '生成记录', icon: 'StackIcon' },
   { key: 'backgrounds', label: '背景库', icon: 'ImageIcon' },
@@ -10,6 +10,12 @@ export const screens = [
   { key: 'login', label: '系统登录', icon: 'ExitIcon', hideInNav: true },
   { key: 'logout', label: '退出', icon: 'ExitIcon' }
 ];
+
+export const kioskScreens = adminScreens.filter(
+  (item) => !['backgrounds', 'skills', 'styles', 'logout'].includes(item.key),
+);
+
+export const screens = adminScreens;
 
 export const galleryCards = [
   { name: '新春灯影', tone: 'blue' },

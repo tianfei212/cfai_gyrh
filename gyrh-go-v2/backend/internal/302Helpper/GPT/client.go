@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"gyrh-go-v2/backend/internal/logger"
+	safelog "gyrh-go-v2/backend/internal/platform/logging"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 	defaultMaxWait      = 300 * time.Second
 )
 
-// Config controls the direct 302.ai GPT Image client.
+// Config 控制直连 302.ai GPT Image 客户端的基础配置。
 type Config struct {
 	Enabled             bool
 	BaseURL             string
@@ -33,7 +34,7 @@ type Config struct {
 	MaxWaitSeconds      int
 }
 
-// Client calls 302.ai GPT Image APIs directly.
+// Client 负责直接调用 302.ai GPT Image 上游接口。
 type Client struct {
 	cfg          Config
 	httpClient   *http.Client
@@ -41,20 +42,20 @@ type Client struct {
 	maxWait      time.Duration
 }
 
-// ComposeRequest contains one GPT Image edit request.
+// ComposeRequest 描述一次 GPT Image 图片编辑请求。
 type ComposeRequest struct {
 	Prompt          string
 	ForegroundImage []byte
 	BackgroundImage []byte
 }
 
-// ComposeResult contains the generated image bytes and source URL.
+// ComposeResult 描述 GPT Image 生成结果的图片数据和来源 URL。
 type ComposeResult struct {
 	Image []byte
 	URL   string
 }
 
-// NewClient creates a direct 302.ai GPT Image client.
+// NewClient 创建直连 302.ai GPT Image 的客户端实例。
 func NewClient(cfg Config) *Client {
 	cfg.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
 	if cfg.BaseURL == "" {
@@ -84,7 +85,7 @@ func NewClient(cfg Config) *Client {
 	}
 }
 
-// Compose submits an async GPT Image edit task, waits for it, and downloads the result.
+// Compose 提交异步 GPT Image 编辑任务，等待完成后下载最终结果图。
 func (c *Client) Compose(ctx context.Context, req ComposeRequest) (*ComposeResult, error) {
 	taskID, err := c.CreateTask(ctx, req)
 	if err != nil {
@@ -93,7 +94,7 @@ func (c *Client) Compose(ctx context.Context, req ComposeRequest) (*ComposeResul
 	return c.WaitResult(ctx, taskID)
 }
 
-// CreateTask submits a direct 302.ai GPT Image edits request.
+// CreateTask 提交 302.ai GPT Image edits 请求，并返回上游任务 ID。
 func (c *Client) CreateTask(ctx context.Context, req ComposeRequest) (string, error) {
 	if err := c.validateReady(); err != nil {
 		return "", err
@@ -151,6 +152,7 @@ func (c *Client) CreateTask(ctx context.Context, req ComposeRequest) (string, er
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 
 	logger.Info("302 GPT 创建任务: model=%s prompt_len=%d image_bytes=%d", c.cfg.ModelName, len(prompt), len(req.ForegroundImage))
+	logger.Debug("302 GPT 创建任务请求: method=%s url=%s headers=%v payload=%s", httpReq.Method, httpReq.URL.String(), safelog.SanitizeHeaders(httpReq.Header), safelog.SanitizePayload([]byte(fmt.Sprintf("%v", fields))))
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("调用 302 GPT 创建任务失败: %w", err)
@@ -158,6 +160,7 @@ func (c *Client) CreateTask(ctx context.Context, req ComposeRequest) (string, er
 	defer resp.Body.Close()
 
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	logger.Debug("302 GPT 创建任务响应: status=%d headers=%v payload=%s", resp.StatusCode, safelog.SanitizeHeaders(resp.Header), safelog.SanitizePayload(data))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("302 GPT 创建任务失败: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
@@ -169,7 +172,7 @@ func (c *Client) CreateTask(ctx context.Context, req ComposeRequest) (string, er
 	return taskID, nil
 }
 
-// WaitResult polls 302.ai async_result and downloads the generated image.
+// WaitResult 轮询 302.ai async_result，并在完成后下载生成图片。
 func (c *Client) WaitResult(ctx context.Context, taskID string) (*ComposeResult, error) {
 	if err := c.validateReady(); err != nil {
 		return nil, err
@@ -217,6 +220,7 @@ func (c *Client) fetchResultURL(ctx context.Context, taskID string) (string, boo
 	}
 	req.Header.Set("Authorization", "Bearer "+providerAPIKey())
 
+	logger.Debug("302 GPT 轮询任务请求: method=%s url=%s headers=%v", req.Method, req.URL.String(), safelog.SanitizeHeaders(req.Header))
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", false, fmt.Errorf("轮询 302 GPT 任务失败: %w", err)
@@ -224,6 +228,7 @@ func (c *Client) fetchResultURL(ctx context.Context, taskID string) (string, boo
 	defer resp.Body.Close()
 
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	logger.Debug("302 GPT 轮询任务响应: status=%d headers=%v payload=%s", resp.StatusCode, safelog.SanitizeHeaders(resp.Header), safelog.SanitizePayload(data))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", false, fmt.Errorf("轮询 302 GPT 任务失败: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
@@ -244,11 +249,13 @@ func (c *Client) downloadImage(ctx context.Context, resultURL string) ([]byte, e
 	}
 	req.Header.Set("Accept", "image/*")
 
+	logger.Debug("302 GPT 下载结果请求: method=%s url=%s headers=%v", req.Method, req.URL.String(), safelog.SanitizeHeaders(req.Header))
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("下载 302 GPT 结果失败: %w", err)
 	}
 	defer resp.Body.Close()
+	logger.Debug("302 GPT 下载结果响应: status=%d headers=%v", resp.StatusCode, safelog.SanitizeHeaders(resp.Header))
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("下载 302 GPT 结果失败: status=%d", resp.StatusCode)

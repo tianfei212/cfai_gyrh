@@ -63,10 +63,10 @@ export function CenteredStage({ children, muted = false }) {
   );
 }
 
-export function ControlRail({ screen, onSelect }) {
+export function ControlRail({ screen, onSelect, items = screens }) {
   return (
     <nav className="control-rail" aria-label="Screen selector">
-      {screens
+      {items
         .filter((item) => !item.hideInNav)
         .map((item) => (
           <button

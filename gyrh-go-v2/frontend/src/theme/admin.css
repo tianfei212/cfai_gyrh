@@ -1,0 +1,7 @@
+.app-mode-admin .canvas-frame {
+  max-width: 1920px;
+}
+
+.app-mode-admin .control-rail button.active {
+  box-shadow: var(--gyrh-shadow-float);
+}

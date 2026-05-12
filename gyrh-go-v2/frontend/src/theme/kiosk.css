@@ -1,0 +1,43 @@
+.app-mode-kiosk {
+  font-size: var(--gyrh-kiosk-body);
+}
+
+.app-mode-kiosk .control-rail {
+  gap: clamp(18px, 1.4vw, 32px);
+}
+
+.app-mode-kiosk .control-rail button {
+  min-width: clamp(160px, 10vw, 260px);
+  min-height: var(--gyrh-touch-primary);
+  border-radius: var(--gyrh-radius-xl);
+  font-size: clamp(22px, 1.45vw, 34px);
+  letter-spacing: 0.04em;
+}
+
+.app-mode-kiosk .canvas-frame {
+  max-width: 2440px;
+  aspect-ratio: 16 / 9;
+  margin: auto;
+}
+
+.app-mode-kiosk .topbar {
+  min-height: 104px;
+}
+
+.app-mode-kiosk .brand-cluster span,
+.app-mode-kiosk h1,
+.app-mode-kiosk h2 {
+  font-size: var(--gyrh-kiosk-title);
+  line-height: 1.08;
+}
+
+.app-mode-kiosk .header-icon {
+  min-height: var(--gyrh-touch-min);
+  min-width: var(--gyrh-touch-min);
+  border-radius: 24px;
+  font-size: clamp(20px, 1.2vw, 28px);
+}
+
+.app-mode-kiosk .status-pill {
+  font-size: clamp(18px, 1vw, 24px);
+}

@@ -1,0 +1,27 @@
+.glass-panel,
+.workbench-screen,
+.simple-screen,
+.centered-panel,
+.history-sidebar {
+  border: 1px solid var(--gyrh-glass-border);
+  background: linear-gradient(145deg, var(--gyrh-glass-surface-strong), rgba(255, 255, 255, 0.06));
+  box-shadow: var(--gyrh-shadow-soft);
+  backdrop-filter: blur(28px) saturate(140%);
+}
+
+.header-icon,
+.control-rail button,
+.tiny-chip {
+  min-height: 44px;
+  border: 1px solid var(--gyrh-glass-border);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(20px);
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.header-icon:active,
+.control-rail button:active,
+.tiny-chip:active {
+  transform: translateY(2px) scale(0.98);
+}

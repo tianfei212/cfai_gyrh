@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	imageapp "gyrh-go-v2/backend/internal/application/image"
 	"gyrh-go-v2/backend/internal/core/llm"
 	"gyrh-go-v2/backend/internal/db"
 	"gyrh-go-v2/backend/internal/logger"
@@ -34,6 +35,7 @@ type ImageHandler struct {
 	llmService           llm.Service              // 大模型服务
 	rewriteTaskRepo      *db.RewriteTaskRepo      // 异步改写任务仓库
 	rewriteTasks         *rewriteTaskStore        // 异步改写任务
+	imageService         *imageapp.Service        // 图片应用服务
 }
 
 // NewImageHandler 创建图像处理器实例
@@ -57,6 +59,7 @@ func NewImageHandler(
 		llmService:           llmService,
 		rewriteTaskRepo:      taskRepo,
 		rewriteTasks:         newRewriteTaskStore(),
+		imageService:         imageapp.NewService(imageRepo, storageService),
 	}
 	handler.restoreRunningRewriteTasks()
 	return handler
@@ -100,44 +103,19 @@ func (h *ImageHandler) List(ctx context.Context, w http.ResponseWriter, r *http.
 
 	logger.Info("获取图像列表: limit=%d, offset=%d", limit, offset)
 
-	// 查询图像列表
-	images, err := h.imageRepo.List(limit, offset)
+	// 查询图像列表，业务编排交给 application 层。
+	result, err := h.imageService.ListImages(ctx, limit, offset)
 	if err != nil {
 		logger.Error("查询图像列表失败: %v", err)
 		return writeJSONError(w, http.StatusInternalServerError, "查询图像列表失败")
 	}
 
-	// 获取总数
-	total, err := h.imageRepo.Count()
-	if err != nil {
-		logger.Warn("获取图像总数失败: %v", err)
-		total = int64(len(images))
-	}
-
-	for _, img := range images {
-		if img == nil {
-			continue
-		}
-		if img.AssetID == "" {
-			img.AssetID = img.Path
-		}
-		if img.AssetID == "" {
-			continue
-		}
-		imageURL, urlErr := h.storageService.GetImageURL(ctx, img.AssetID)
-		if urlErr != nil {
-			logger.Warn("生成历史图像访问 URL 失败: id=%d, asset_id=%s, err=%v", img.ID, img.AssetID, urlErr)
-			continue
-		}
-		img.ImageURL = imageURL
-	}
-
-	logger.Info("图像列表查询成功: count=%d, total=%d", len(images), total)
+	logger.Info("图像列表查询成功: count=%d, total=%d", len(result.Images), result.Total)
 
 	return writeJSON(w, http.StatusOK, ListResponse{
 		Success: true,
-		Images:  images,
-		Total:   total,
+		Images:  result.Images,
+		Total:   result.Total,
 		Message: "获取图像列表成功",
 	})
 }

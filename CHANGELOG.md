@@ -28,6 +28,58 @@
 - commit hash：未提交，提交后补充
 ```
 
+## 2026-05-12 16:18 UTC+8
+
+- 日期：2026-05-12
+- 更新时间：16:18 UTC+8
+- 分支：refactor/go-version-decoupling
+- 目的：对 Go 版本程序启动装配、模型边界、图片列表用例和前端双入口进行分层解耦，并为 55 寸 2K 触控屏演示端抽离基础玻璃拟态主题。
+- 执行者：GPT-5.5（GPT-5.5，OpenAI）
+- 详细修改内容：
+  - 后端新增 `platform/app` 组合根，将原 `cmd/server/main.go` 中的配置加载、数据库、OSS、存储、模型、Handler 和路由装配迁移到独立包，入口文件只保留最小启动逻辑。
+  - 后端新增 `platform/logging` 日志脱敏工具，支持对请求头和 payload 中的 Authorization、Cookie、API Key、Token、Secret、签名等敏感字段进行脱敏。
+  - 302 GPT Image 客户端补充中文注释和 debug 级请求/响应日志，记录上游请求头、payload、响应头和响应体，同时避免泄露密钥。
+  - 新增 `domain/model`、`domain/image`、`domain/rewrite` 和 `infrastructure/model` 分层骨架，先用兼容适配方式承接现有 LLM Service。
+  - 新增 `application/image` 图片应用服务，并将图片列表查询和访问 URL 补齐逻辑从 Handler 迁移到 application 层。
+  - 前端新增 `AppShell`、`AppRoutes`、`KioskViewer` 和 `AdminViewer`，将 `/` 作为无登录一体机演示入口，将 `/admin_viewer` 作为完整管理入口。
+  - 前端拆分 `adminScreens` 与 `kioskScreens`，演示端隐藏“背景库、SKILL 管理、风格转换配置、退出”菜单。
+  - 前端新增 `theme/tokens.css`、`theme/glass.css`、`theme/kiosk.css`、`theme/admin.css`，抽离基础皮肤变量、玻璃拟态效果和 2K 触控屏演示端字号/触控尺寸。
+  - 新增本次解耦设计文档和实施计划文档。
+- 文件清单：
+  - `CHANGELOG.md`
+  - `gyrh-go-v2/backend/cmd/server/main.go`
+  - `gyrh-go-v2/backend/internal/302Helpper/GPT/client.go`
+  - `gyrh-go-v2/backend/internal/api/handler/image.go`
+  - `gyrh-go-v2/backend/internal/application/image/service.go`
+  - `gyrh-go-v2/backend/internal/domain/image/image.go`
+  - `gyrh-go-v2/backend/internal/domain/model/model.go`
+  - `gyrh-go-v2/backend/internal/domain/rewrite/task.go`
+  - `gyrh-go-v2/backend/internal/domain/rewrite/task_test.go`
+  - `gyrh-go-v2/backend/internal/infrastructure/model/router.go`
+  - `gyrh-go-v2/backend/internal/platform/app/alioss.go`
+  - `gyrh-go-v2/backend/internal/platform/app/app.go`
+  - `gyrh-go-v2/backend/internal/platform/app/app_test.go`
+  - `gyrh-go-v2/backend/internal/platform/logging/sanitize.go`
+  - `gyrh-go-v2/backend/internal/platform/logging/sanitize_test.go`
+  - `gyrh-go-v2/docs/superpowers/plans/2026-05-12-go-version-decoupling.md`
+  - `gyrh-go-v2/docs/superpowers/specs/2026-05-12-go-version-decoupling-design.md`
+  - `gyrh-go-v2/frontend/src/App.jsx`
+  - `gyrh-go-v2/frontend/src/app/AppShell.jsx`
+  - `gyrh-go-v2/frontend/src/app/routes.jsx`
+  - `gyrh-go-v2/frontend/src/components/Layout.jsx`
+  - `gyrh-go-v2/frontend/src/constants/index.js`
+  - `gyrh-go-v2/frontend/src/main.jsx`
+  - `gyrh-go-v2/frontend/src/pages/admin/AdminViewer.jsx`
+  - `gyrh-go-v2/frontend/src/pages/kiosk/KioskViewer.jsx`
+  - `gyrh-go-v2/frontend/src/theme/admin.css`
+  - `gyrh-go-v2/frontend/src/theme/glass.css`
+  - `gyrh-go-v2/frontend/src/theme/kiosk.css`
+  - `gyrh-go-v2/frontend/src/theme/tokens.css`
+- 验证：
+  - `cd gyrh-go-v2/backend && go test ./...`
+  - `cd gyrh-go-v2/frontend && npm run build`
+- commit hash：未提交，提交后补充
+
 ## 2026-05-12 15:44 UTC+8
 
 - 日期：2026-05-12
