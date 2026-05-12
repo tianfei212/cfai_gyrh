@@ -35,7 +35,7 @@
 - 分支：feature/302-gpt-direct-integration
 - 目的：完成 302 GPT Image 直连集成与背景图库远端同步链路，并修复背景图管理页“查看原图”下载问题，改为当前页面内玻璃态原图预览。
 - 执行者：GPT-5.5（GPT-5.5，OpenAI）
-- 推送版本：feature/302-gpt-direct-integration@2026-05-12-1544（提交并推送后以远端分支 HEAD 为准）
+- 推送版本：feature/302-gpt-direct-integration@6af3e69（功能提交版本；远端推送后分支 HEAD 还包含本文档回填提交）
 - 详细修改内容：
   - 后端新增 302 GPT Image 客户端，支持创建异步图片编辑任务、轮询 async_result 并下载结果图。
   - LLM 路由新增 `302-gpt-image` provider，支持同步 Compose、外部异步任务启动与结果等待，并在背景提示词为空时回退到对应 provider 的激活 Skill。
@@ -102,7 +102,7 @@
   - `gyrh-go-v2/backend/data/gyrh.db*`：本地 SQLite 运行时数据文件。
   - `gyrh-go-v2/bin/302helpper-*`：本地构建出的平台二进制产物。
   - `gyrh-go-v2/configs/302Helpper_config.yaml`：包含明文内部 bearer token，避免泄露敏感配置。
-- commit hash：未提交，提交后补充
+- commit hash：`6af3e69`
 
 ## 2026-05-11 23:36 UTC+8
 
