@@ -28,6 +28,31 @@
 - commit hash：未提交，提交后补充
 ```
 
+## 2026-05-12 16:37 UTC+8
+
+- 日期：2026-05-12
+- 更新时间：16:37 UTC+8
+- 分支：refactor/go-version-decoupling
+- 目的：将前端默认模型切换为 Gemini，并新增 Ubuntu 443 部署包构建脚本，支持安全环境变量模板、Nginx、systemd 守护进程和管理脚本生成。
+- 执行者：GPT-5.5（GPT-5.5，OpenAI）
+- 详细修改内容：
+  - 前端 `AppShell` 默认模型从 Wan 切换为 Gemini。
+  - 新增 `scripts/build_release.sh`，用于构建前端静态文件、构建 Ubuntu amd64 Go 单文件后端二进制、打包数据库、生成图、配置文件和部署脚本。
+  - 部署包只生成 `.env.local.example`，不会打包真实 `.env.local` 或真实密钥，新机器释放后必须人工填写。
+  - 部署包内自动生成 `manage.sh`，支持 `start|stop|restart|status|logs` 管理后端服务。
+  - 部署包内自动生成 `scripts/install_service.sh`，支持安装 systemd 守护进程并开机自启。
+  - 部署包内自动生成 `scripts/install_nginx.sh`，仅支持 Ubuntu，自动安装 Nginx 和 openssl，配置 443 HTTPS，对 `/api/` 反向代理到 Go 后端。
+  - 部署脚本会复制 `oss-cli-linux-amd64` 为部署包内的 `bin/oss-cli`，供 Ubuntu 上 aliOSS 子进程使用。
+- 文件清单：
+  - `CHANGELOG.md`
+  - `gyrh-go-v2/frontend/src/app/AppShell.jsx`
+  - `gyrh-go-v2/scripts/build_release.sh`
+- 验证：
+  - `cd gyrh-go-v2/backend && go test ./...`
+  - `cd gyrh-go-v2/frontend && npm run build`
+  - `cd gyrh-go-v2 && scripts/build_release.sh`：当前 macOS 不是 Ubuntu/Linux 构建环境，脚本在构建前按预期停止，并提示需在 Ubuntu 目标环境或 Ubuntu 构建机上生成 Go 单文件二进制部署包。
+- commit hash：未提交，提交后补充
+
 ## 2026-05-12 16:18 UTC+8
 
 - 日期：2026-05-12

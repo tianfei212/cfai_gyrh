@@ -16,7 +16,7 @@ import { normalizePreviewSelection } from '../utils/previewSelection';
 
 export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
   const [screen, setScreen] = useState('dashboard');
-  const [model, setModel] = useState('W'); // W: Wan, G: Gemini, GPT: 302 GPT Image
+  const [model, setModel] = useState('G'); // W: Wan, G: Gemini, GPT: 302 GPT Image
   const [selectedBg, setSelectedBg] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
   const [previewMode, setPreviewMode] = useState('compare');
