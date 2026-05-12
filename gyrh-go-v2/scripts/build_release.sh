@@ -320,16 +320,27 @@ require_cmd npm
 require_cmd go
 require_cmd tar
 
-assert_linux_build_host() {
-  if [ "$(go env GOOS)" != "linux" ]; then
-    fail "当前脚本只在 Ubuntu/Linux 上生成部署包。后端按 Go 单文件二进制发布，且依赖 sqlite3(cgo)，请在 Ubuntu 目标环境或 Ubuntu 构建机上运行本脚本。"
-  fi
-}
-
 build_backend_linux_amd64() {
   local output="$1"
-  info "检测到 Linux 环境，使用本机 Go 构建 Ubuntu amd64 后端"
-  (cd "$ROOT_DIR/backend" && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o "$output" ./cmd/server)
+  if [ "$(go env GOOS)" = "linux" ]; then
+    info "使用 Go 构建 Ubuntu amd64 后端单文件二进制"
+    (cd "$ROOT_DIR/backend" && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o "$output" ./cmd/server)
+    return
+  fi
+
+  if command -v x86_64-linux-gnu-gcc >/dev/null 2>&1; then
+    info "使用 Go 交叉编译 Ubuntu amd64 后端单文件二进制: CC=x86_64-linux-gnu-gcc"
+    (cd "$ROOT_DIR/backend" && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-gnu-gcc go build -o "$output" ./cmd/server)
+    return
+  fi
+
+  if command -v zig >/dev/null 2>&1; then
+    info "使用 Go + zig cc 交叉编译 Ubuntu amd64 后端单文件二进制"
+    (cd "$ROOT_DIR/backend" && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC="zig cc -target x86_64-linux-gnu" go build -o "$output" ./cmd/server)
+    return
+  fi
+
+  fail "Go 支持跨平台编译，但当前项目使用 mattn/go-sqlite3(cgo)，还需要 Linux amd64 C 交叉编译器。请安装 x86_64-linux-gnu-gcc 或 zig 后重试。"
 }
 
 copy_config_files() {
@@ -342,8 +353,6 @@ copy_config_files() {
     cp -a "$item" "$STAGE_DIR/configs/"
   done
 }
-
-assert_linux_build_host
 
 info "清理旧 release 目录"
 rm -rf "$STAGE_DIR"

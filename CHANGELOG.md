@@ -50,7 +50,7 @@
 - 验证：
   - `cd gyrh-go-v2/backend && go test ./...`
   - `cd gyrh-go-v2/frontend && npm run build`
-  - `cd gyrh-go-v2 && scripts/build_release.sh`：当前 macOS 不是 Ubuntu/Linux 构建环境，脚本在构建前按预期停止，并提示需在 Ubuntu 目标环境或 Ubuntu 构建机上生成 Go 单文件二进制部署包。
+  - `cd gyrh-go-v2 && scripts/build_release.sh`：当前 macOS 缺少 `x86_64-linux-gnu-gcc` 或 `zig` 这类 Linux amd64 cgo 交叉编译器，脚本在后端构建阶段按预期停止并提示安装；前端构建已通过。
 - commit hash：未提交，提交后补充
 
 ## 2026-05-12 16:18 UTC+8
