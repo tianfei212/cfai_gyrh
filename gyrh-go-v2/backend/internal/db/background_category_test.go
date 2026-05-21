@@ -301,7 +301,7 @@ func TestBackgroundPromptRepoListByCategoryKeepsPagination(t *testing.T) {
 
 	firstID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "first")
 	secondID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "second")
-	_ = createBackgroundPromptForCategoryTest(t, backgroundRepo, "unbound")
+	unboundID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "unbound")
 	if err := categoryRepo.ReplaceBackgroundBindings(firstID, []int64{categoryID}); err != nil {
 		t.Fatalf("bind first: %v", err)
 	}
@@ -309,12 +309,44 @@ func TestBackgroundPromptRepoListByCategoryKeepsPagination(t *testing.T) {
 		t.Fatalf("bind second: %v", err)
 	}
 
-	items, err := backgroundRepo.ListByCategory(categoryID, 1, 0)
+	firstPage, err := backgroundRepo.ListByCategory(categoryID, 1, 0)
 	if err != nil {
-		t.Fatalf("list by category: %v", err)
+		t.Fatalf("list first page by category: %v", err)
 	}
-	if len(items) != 1 {
-		t.Fatalf("items len = %d, want 1", len(items))
+	if len(firstPage) != 1 {
+		t.Fatalf("first page len = %d, want 1", len(firstPage))
+	}
+	secondPage, err := backgroundRepo.ListByCategory(categoryID, 1, 1)
+	if err != nil {
+		t.Fatalf("list second page by category: %v", err)
+	}
+	if len(secondPage) != 1 {
+		t.Fatalf("second page len = %d, want 1", len(secondPage))
+	}
+
+	expectedNamesByID := map[int64]string{
+		firstID:  "first",
+		secondID: "second",
+	}
+	seenIDs := map[int64]bool{}
+	for _, item := range append(firstPage, secondPage...) {
+		if item.ID == unboundID {
+			t.Fatalf("paged result included unbound prompt: %+v", item)
+		}
+		expectedName, ok := expectedNamesByID[item.ID]
+		if !ok {
+			t.Fatalf("paged result ID = %d, want one of %v", item.ID, expectedNamesByID)
+		}
+		if item.Name != expectedName {
+			t.Fatalf("paged result name for ID %d = %q, want %q", item.ID, item.Name, expectedName)
+		}
+		if seenIDs[item.ID] {
+			t.Fatalf("paged result duplicated ID %d", item.ID)
+		}
+		seenIDs[item.ID] = true
+	}
+	if len(seenIDs) != len(expectedNamesByID) {
+		t.Fatalf("paged result IDs = %v, want IDs %v", seenIDs, expectedNamesByID)
 	}
 
 	total, err := backgroundRepo.CountByCategory(categoryID)
