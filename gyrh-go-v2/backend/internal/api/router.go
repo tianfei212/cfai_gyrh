@@ -20,6 +20,7 @@ func RegisterRoutes(
 	skillHandler *handler.SkillHandler,
 	llmPromptTemplateHandler *handler.LLMPromptTemplateHandler,
 	backgroundPromptHandler *handler.BackgroundPromptHandler,
+	backgroundCategoryHandler *handler.BackgroundCategoryHandler,
 	stylePromptHandler *handler.StylePromptHandler,
 	authConfig *middleware.AuthConfig,
 ) {
@@ -63,6 +64,11 @@ func RegisterRoutes(
 	protected.HandleFunc("/llm-prompt-templates", llmPromptTemplateHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/llm-prompt-templates/{id}", llmPromptTemplateHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/llm-prompt-templates/{id}", llmPromptTemplateHandler.Delete).Methods(http.MethodDelete)
+
+	protected.HandleFunc("/background-categories", backgroundCategoryHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/background-categories", backgroundCategoryHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/background-categories/{id}", backgroundCategoryHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/background-categories/{id}", backgroundCategoryHandler.Delete).Methods(http.MethodDelete)
 
 	protected.HandleFunc("/background-prompts", backgroundPromptHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/background-prompts/import", backgroundPromptHandler.Import).Methods(http.MethodPost)
