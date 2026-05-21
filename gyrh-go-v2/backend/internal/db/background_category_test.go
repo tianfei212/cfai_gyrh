@@ -105,6 +105,55 @@ func TestBackgroundCategoryRepoSupportsManyToManyBindings(t *testing.T) {
 	}
 }
 
+func TestBackgroundCategoryRepoRejectsInvalidCategoryBindings(t *testing.T) {
+	testDB := newCategoryTestDB(t)
+	backgroundRepo := NewBackgroundPromptRepo(testDB)
+	categoryRepo := NewBackgroundCategoryRepo(testDB)
+	backgroundID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "bg")
+
+	categoryID, err := categoryRepo.Create("文旅片", "四川大佛")
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	if err := categoryRepo.ReplaceBackgroundBindings(backgroundID, []int64{categoryID}); err != nil {
+		t.Fatalf("bind background: %v", err)
+	}
+
+	if err := categoryRepo.ReplaceBackgroundBindings(backgroundID, []int64{categoryID + 999}); err == nil {
+		t.Fatal("expected error binding nonexistent category")
+	}
+
+	categories, err := categoryRepo.ListByBackgroundID(backgroundID)
+	if err != nil {
+		t.Fatalf("list categories: %v", err)
+	}
+	if len(categories) != 1 || categories[0].ID != categoryID {
+		t.Fatalf("categories after invalid replace = %+v, want original category", categories)
+	}
+}
+
+func TestBackgroundCategoryRepoRejectsInvalidBackgroundBindings(t *testing.T) {
+	testDB := newCategoryTestDB(t)
+	categoryRepo := NewBackgroundCategoryRepo(testDB)
+
+	categoryID, err := categoryRepo.Create("文旅片", "四川大佛")
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	if err := categoryRepo.ReplaceBackgroundBindings(999999, []int64{categoryID}); err == nil {
+		t.Fatal("expected error binding nonexistent background")
+	}
+
+	backgroundIDs, err := categoryRepo.ListBackgroundIDs(categoryID)
+	if err != nil {
+		t.Fatalf("list category backgrounds: %v", err)
+	}
+	if len(backgroundIDs) != 0 {
+		t.Fatalf("background IDs = %+v, want none", backgroundIDs)
+	}
+}
+
 func TestBackgroundCategoryRepoProtectsDefaultCategory(t *testing.T) {
 	testDB := newCategoryTestDB(t)
 	repo := NewBackgroundCategoryRepo(testDB)
@@ -118,6 +167,37 @@ func TestBackgroundCategoryRepoProtectsDefaultCategory(t *testing.T) {
 	}
 	if err := repo.Delete(defaultCategory.ID); err == nil {
 		t.Fatal("expected error deleting default category")
+	}
+}
+
+func TestBackgroundCategoryRepoDeleteKeepsExistingCategoryBinding(t *testing.T) {
+	testDB := newCategoryTestDB(t)
+	backgroundRepo := NewBackgroundPromptRepo(testDB)
+	categoryRepo := NewBackgroundCategoryRepo(testDB)
+	backgroundID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "bg")
+
+	firstCategoryID, err := categoryRepo.Create("文旅片", "四川大佛")
+	if err != nil {
+		t.Fatalf("create first category: %v", err)
+	}
+	secondCategoryID, err := categoryRepo.Create("科幻电影", "机甲战斗")
+	if err != nil {
+		t.Fatalf("create second category: %v", err)
+	}
+	if err := categoryRepo.ReplaceBackgroundBindings(backgroundID, []int64{firstCategoryID, secondCategoryID}); err != nil {
+		t.Fatalf("bind background: %v", err)
+	}
+
+	if err := categoryRepo.Delete(firstCategoryID); err != nil {
+		t.Fatalf("delete category: %v", err)
+	}
+
+	categories, err := categoryRepo.ListByBackgroundID(backgroundID)
+	if err != nil {
+		t.Fatalf("list categories: %v", err)
+	}
+	if len(categories) != 1 || categories[0].ID != secondCategoryID {
+		t.Fatalf("categories after delete = %+v, want remaining category", categories)
 	}
 }
 
@@ -145,5 +225,40 @@ func TestBackgroundCategoryRepoDeleteRebindsOrphansToDefault(t *testing.T) {
 	}
 	if len(categories) != 1 || categories[0].ParentName != DefaultCategoryParent || categories[0].ChildName != DefaultCategoryChild {
 		t.Fatalf("categories after delete = %+v, want default/default", categories)
+	}
+}
+
+func TestBackgroundCategoryRepoDeletesBackgroundBindings(t *testing.T) {
+	testDB := newCategoryTestDB(t)
+	backgroundRepo := NewBackgroundPromptRepo(testDB)
+	categoryRepo := NewBackgroundCategoryRepo(testDB)
+	backgroundID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "bg")
+
+	categoryID, err := categoryRepo.Create("文旅片", "四川大佛")
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	if err := categoryRepo.ReplaceBackgroundBindings(backgroundID, []int64{categoryID}); err != nil {
+		t.Fatalf("bind background: %v", err)
+	}
+
+	if err := categoryRepo.DeleteBackgroundBindings(backgroundID); err != nil {
+		t.Fatalf("delete background bindings: %v", err)
+	}
+
+	categories, err := categoryRepo.ListByBackgroundID(backgroundID)
+	if err != nil {
+		t.Fatalf("list categories: %v", err)
+	}
+	if len(categories) != 0 {
+		t.Fatalf("categories after cleanup = %+v, want none", categories)
+	}
+
+	backgroundIDs, err := categoryRepo.ListBackgroundIDs(categoryID)
+	if err != nil {
+		t.Fatalf("list category backgrounds: %v", err)
+	}
+	if len(backgroundIDs) != 0 {
+		t.Fatalf("category background IDs after cleanup = %+v, want none", backgroundIDs)
 	}
 }

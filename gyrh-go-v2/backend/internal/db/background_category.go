@@ -311,6 +311,13 @@ func (r *BackgroundCategoryRepo) ListBackgroundIDs(categoryID int64) ([]int64, e
 // ReplaceBackgroundBindings 替换背景提示词的分类绑定。
 func (r *BackgroundCategoryRepo) ReplaceBackgroundBindings(backgroundID int64, categoryIDs []int64) error {
 	return r.db.Transaction(func(tx *sql.Tx) error {
+		if err := r.ensureBackgroundExistsInTx(tx, backgroundID); err != nil {
+			return err
+		}
+		if err := r.ensureCategoriesExistInTx(tx, categoryIDs); err != nil {
+			return err
+		}
+
 		if _, err := tx.Exec("DELETE FROM background_category_bindings WHERE background_prompt_id = ?", backgroundID); err != nil {
 			return fmt.Errorf("删除背景提示词分类绑定失败: %w", err)
 		}
@@ -337,6 +344,14 @@ func (r *BackgroundCategoryRepo) ReplaceBackgroundBindings(backgroundID int64, c
 	})
 }
 
+// DeleteBackgroundBindings 删除指定背景提示词的所有分类绑定。
+func (r *BackgroundCategoryRepo) DeleteBackgroundBindings(backgroundID int64) error {
+	if _, err := r.db.Exec("DELETE FROM background_category_bindings WHERE background_prompt_id = ?", backgroundID); err != nil {
+		return fmt.Errorf("删除背景提示词分类绑定失败: %w", err)
+	}
+	return nil
+}
+
 // EnsureDefaultBindingForBackground 确保指定背景提示词至少绑定到 default/default。
 func (r *BackgroundCategoryRepo) EnsureDefaultBindingForBackground(backgroundID int64) error {
 	return r.db.Transaction(func(tx *sql.Tx) error {
@@ -355,6 +370,50 @@ func (r *BackgroundCategoryRepo) ensureNotDefault(id int64) error {
 	}
 	if category.ParentName == DefaultCategoryParent && category.ChildName == DefaultCategoryChild {
 		return fmt.Errorf("默认背景分类不能修改或删除")
+	}
+	return nil
+}
+
+func (r *BackgroundCategoryRepo) ensureBackgroundExistsInTx(tx *sql.Tx, backgroundID int64) error {
+	var count int
+	if err := tx.QueryRow("SELECT COUNT(1) FROM background_prompts WHERE id = ?", backgroundID).Scan(&count); err != nil {
+		return fmt.Errorf("查询背景提示词失败: %w", err)
+	}
+	if count == 0 {
+		return fmt.Errorf("背景图提示词模板不存在: id=%d", backgroundID)
+	}
+	return nil
+}
+
+func (r *BackgroundCategoryRepo) ensureCategoriesExistInTx(tx *sql.Tx, categoryIDs []int64) error {
+	if len(categoryIDs) == 0 {
+		return nil
+	}
+
+	uniqueIDs := make([]int64, 0, len(categoryIDs))
+	seen := make(map[int64]struct{}, len(categoryIDs))
+	for _, id := range categoryIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniqueIDs = append(uniqueIDs, id)
+	}
+
+	placeholders := make([]string, len(uniqueIDs))
+	args := make([]any, len(uniqueIDs))
+	for i, id := range uniqueIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	var count int
+	query := fmt.Sprintf("SELECT COUNT(1) FROM background_categories WHERE id IN (%s)", strings.Join(placeholders, ", "))
+	if err := tx.QueryRow(query, args...).Scan(&count); err != nil {
+		return fmt.Errorf("查询背景分类失败: %w", err)
+	}
+	if count != len(uniqueIDs) {
+		return fmt.Errorf("背景分类不存在")
 	}
 	return nil
 }
