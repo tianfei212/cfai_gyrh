@@ -79,7 +79,14 @@ func parseOptionalInt64Query(r *http.Request, key string) (int64, error) {
 	if value == "" {
 		return 0, nil
 	}
-	return strconv.ParseInt(value, 10, 64)
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("%s must be positive", key)
+	}
+	return parsed, nil
 }
 
 // List 返回背景图提示词模板列表。
@@ -196,6 +203,11 @@ func (h *BackgroundPromptHandler) UpdateCategories(w http.ResponseWriter, r *htt
 		return
 	}
 
+	if _, err := h.repo.GetByID(id); err != nil {
+		httpx.WriteJSON(w, http.StatusNotFound, httpx.Error(1, "背景图提示词模板不存在"))
+		return
+	}
+
 	if err := h.categoryRepo.ReplaceBackgroundBindings(id, req.CategoryIDs); err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "更新背景图提示词分类失败"))
 		return
@@ -270,6 +282,7 @@ func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.ensureDefaultCategoryBinding(id); err != nil {
+		h.deletePromptAfterBindingFailure(id)
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "绑定默认背景分类失败"))
 		return
 	}
@@ -504,6 +517,8 @@ func (h *BackgroundPromptHandler) Import(w http.ResponseWriter, r *http.Request)
 	}
 	if err := h.ensureDefaultCategoryBinding(id); err != nil {
 		logger.Error("绑定默认背景分类失败: %v", err)
+		h.deletePromptAfterBindingFailure(id)
+		_ = h.storageService.Delete(context.Background(), assetID)
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "绑定默认背景分类失败"))
 		return
 	}
@@ -642,6 +657,12 @@ func (h *BackgroundPromptHandler) ensureDefaultCategoryBinding(backgroundID int6
 		return nil
 	}
 	return h.categoryRepo.EnsureDefaultBindingForBackground(backgroundID)
+}
+
+func (h *BackgroundPromptHandler) deletePromptAfterBindingFailure(backgroundID int64) {
+	if err := h.repo.Delete(backgroundID); err != nil {
+		logger.Error("清理背景图提示词失败: %v", err)
+	}
 }
 
 func decodeImageSize(data []byte) (int, int, error) {
@@ -791,6 +812,8 @@ func (h *BackgroundPromptHandler) importRemoteMediaItem(ctx context.Context, api
 		return fmt.Errorf("保存背景图记录失败")
 	}
 	if err := h.ensureDefaultCategoryBinding(id); err != nil {
+		h.deletePromptAfterBindingFailure(id)
+		_ = h.storageService.Delete(context.Background(), assetID)
 		return fmt.Errorf("绑定默认背景分类失败")
 	}
 

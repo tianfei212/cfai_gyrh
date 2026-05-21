@@ -62,7 +62,8 @@ func TestParseRemoteDimensions(t *testing.T) {
 }
 
 type fakeStorageService struct {
-	saved [][]byte
+	saved   [][]byte
+	deleted []string
 }
 
 func (s *fakeStorageService) Save(ctx context.Context, data []byte, filename string) (string, error) {
@@ -91,6 +92,7 @@ func (s *fakeStorageService) GetForModelUpload(ctx context.Context, assetID stri
 }
 
 func (s *fakeStorageService) Delete(ctx context.Context, assetID string) error {
+	s.deleted = append(s.deleted, assetID)
 	return nil
 }
 
