@@ -19,6 +19,17 @@ test('builds background prompt list URL with limit and offset', () => {
   );
 });
 
+test('adds category filter to background prompt list URL when category is positive', () => {
+  assert.equal(
+    buildBackgroundPromptListUrl(2, 6, { categoryId: 9 }),
+    '/api/v1/background-prompts?limit=6&offset=6&category_id=9',
+  );
+  assert.equal(
+    buildBackgroundPromptListUrl(1, 6, { categoryId: 0 }),
+    '/api/v1/background-prompts?limit=6&offset=0',
+  );
+});
+
 test('clamps invalid page values when building list URL', () => {
   assert.equal(
     buildBackgroundPromptListUrl(0),
