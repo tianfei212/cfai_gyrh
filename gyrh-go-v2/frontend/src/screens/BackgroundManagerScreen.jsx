@@ -9,6 +9,23 @@ import {
 } from '../utils/backgroundPagination';
 import siteConfig from '../../../../siteConfig.json';
 
+function formatCategoryLabel(category) {
+  const parentName = category?.parent_name || 'default';
+  const childName = category?.child_name || 'default';
+  return `${parentName}/${childName}`;
+}
+
+function formatCategoryList(categories = []) {
+  if (!Array.isArray(categories) || categories.length === 0) {
+    return 'default/default';
+  }
+  return categories.map(formatCategoryLabel).join('、') || 'default/default';
+}
+
+function isDefaultCategory(category) {
+  return category?.parent_name === 'default' && category?.child_name === 'default';
+}
+
 function BackgroundEditModal({ item, onClose, onSaved }) {
   const [isEditing, setIsEditing] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -177,6 +194,217 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
   );
 }
 
+function BackgroundCategoryManagerModal({ categories, onClose, onChanged }) {
+  const [formData, setFormData] = useState({ parent_name: '', child_name: '' });
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const resetForm = () => {
+    setFormData({ parent_name: '', child_name: '' });
+    setEditingCategory(null);
+  };
+
+  const handleEdit = (category) => {
+    setEditingCategory(category);
+    setFormData({
+      parent_name: category.parent_name || '',
+      child_name: category.child_name || '',
+    });
+  };
+
+  const handleSave = async () => {
+    const parentName = formData.parent_name.trim();
+    const childName = formData.child_name.trim();
+    if (!parentName || !childName) {
+      alert('大类和小类不能为空');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const url = editingCategory
+        ? `/api/v1/background-categories/${editingCategory.id}`
+        : '/api/v1/background-categories';
+      await fetchApi(url, {
+        method: editingCategory ? 'PUT' : 'POST',
+        body: JSON.stringify({
+          parent_name: parentName,
+          child_name: childName,
+        }),
+      });
+      resetForm();
+      await onChanged();
+    } catch (err) {
+      alert('保存类型失败: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (category) => {
+    if (isDefaultCategory(category)) return;
+    if (!window.confirm(`确认删除 ${formatCategoryLabel(category)} 吗？受影响背景将回到 default/default。`)) return;
+
+    setDeletingId(category.id);
+    try {
+      await fetchApi(`/api/v1/background-categories/${category.id}`, { method: 'DELETE' });
+      if (editingCategory?.id === category.id) {
+        resetForm();
+      }
+      await onChanged();
+    } catch (err) {
+      alert('删除类型失败: ' + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div className="modal-content" style={{ background: '#1e2025', width: '72%', maxWidth: '760px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '12px', padding: '24px', color: '#fff' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{ margin: 0 }}>类型管理</h3>
+          <button className="mini-outline" type="button" onClick={onClose} style={{ cursor: 'pointer' }}>关闭</button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '12px', marginBottom: '20px', alignItems: 'end' }}>
+          <div>
+            <h4 style={{ margin: '0 0 8px 0' }}>大类</h4>
+            <input
+              type="text"
+              value={formData.parent_name}
+              onChange={(event) => setFormData(prev => ({ ...prev, parent_name: event.target.value }))}
+              style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px' }}
+            />
+          </div>
+          <div>
+            <h4 style={{ margin: '0 0 8px 0' }}>小类</h4>
+            <input
+              type="text"
+              value={formData.child_name}
+              onChange={(event) => setFormData(prev => ({ ...prev, child_name: event.target.value }))}
+              style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '6px' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="primary-btn" type="button" onClick={handleSave} disabled={saving}>
+              {saving ? '保存中...' : editingCategory ? '保存修改' : '新增类型'}
+            </button>
+            {editingCategory && (
+              <button className="secondary-btn" type="button" onClick={resetForm} disabled={saving}>取消</button>
+            )}
+          </div>
+        </div>
+
+        <div className="table-shell">
+          <div className="table-header table-grid" style={{ gridTemplateColumns: '1fr 1fr 180px' }}>
+            <span>大类</span>
+            <span>小类</span>
+            <span>操作</span>
+          </div>
+          {categories.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>暂无类型数据</div>
+          ) : (
+            categories.map((category) => (
+              <div className="table-row table-grid" key={category.id} style={{ gridTemplateColumns: '1fr 1fr 180px' }}>
+                <span>{category.parent_name || 'default'}</span>
+                <span>{category.child_name || 'default'}</span>
+                <div className="table-actions">
+                  {isDefaultCategory(category) ? (
+                    <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px' }}>系统保留</span>
+                  ) : (
+                    <>
+                      <button className="mini-outline" type="button" onClick={() => handleEdit(category)} disabled={saving || deletingId === category.id}>编辑</button>
+                      <button className="mini-outline" type="button" onClick={() => handleDelete(category)} disabled={saving || deletingId === category.id}>
+                        {deletingId === category.id ? '删除中...' : '删除'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BackgroundCategoryBindingModal({ item, categories, onClose, onSaved }) {
+  const [selectedIds, setSelectedIds] = useState(() => (
+    Array.isArray(item?.categories) ? item.categories.map(category => category.id) : []
+  ));
+  const [saving, setSaving] = useState(false);
+
+  const handleToggle = (categoryId) => {
+    setSelectedIds(prev => (
+      prev.includes(categoryId)
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    ));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetchApi(`/api/v1/background-prompts/${item.id}/categories`, {
+        method: 'PUT',
+        body: JSON.stringify({ category_ids: selectedIds }),
+      });
+      await onSaved();
+    } catch (err) {
+      alert('保存类型绑定失败: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div className="modal-content" style={{ background: '#1e2025', width: '60%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '12px', padding: '24px', color: '#fff' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div>
+            <h3 style={{ margin: 0 }}>选择类型</h3>
+            <p style={{ margin: '8px 0 0 0', color: 'rgba(255,255,255,0.6)' }}>{item.name || `背景 ${item.id}`}</p>
+          </div>
+          <button className="mini-outline" type="button" onClick={onClose} style={{ cursor: 'pointer' }}>关闭</button>
+        </div>
+
+        <div style={{ display: 'grid', gap: '10px', marginBottom: '24px' }}>
+          {categories.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>暂无类型数据</div>
+          ) : (
+            categories.map((category) => (
+              <label
+                key={category.id}
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', cursor: 'pointer' }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(category.id)}
+                  onChange={() => handleToggle(category.id)}
+                />
+                <span>{formatCategoryLabel(category)}</span>
+                {isDefaultCategory(category) && (
+                  <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px' }}>系统默认</span>
+                )}
+              </label>
+            ))
+          )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+          <button className="secondary-btn" type="button" onClick={onClose} disabled={saving}>取消</button>
+          <button className="primary-btn" type="button" onClick={handleSave} disabled={saving}>
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OriginalImagePreviewModal({ item, onClose }) {
   if (!item?.image_url) return null;
 
@@ -200,15 +428,19 @@ function OriginalImagePreviewModal({ item, onClose }) {
 
 export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleModel, model }) {
   const [backgrounds, setBackgrounds] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [previewingItem, setPreviewingItem] = useState(null);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categoryBindingItem, setCategoryBindingItem] = useState(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const fileInputRef = React.useRef(null);
   const limit = BACKGROUND_MANAGER_PAGE_SIZE;
+  const tableGridStyle = { gridTemplateColumns: '1.1fr 90px 1fr 1fr 1fr 1fr 240px' };
 
   const fetchBackgrounds = async (targetPage = page) => {
     try {
@@ -223,9 +455,22 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const data = await fetchApi('/api/v1/background-categories');
+      setCategories(data || []);
+    } catch (err) {
+      console.error('Failed to fetch background categories:', err);
+    }
+  };
+
   useEffect(() => {
     fetchBackgrounds();
   }, [page]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   const refreshBackgrounds = async ({ resetToFirstPage = false } = {}) => {
     const nextPage = getPageAfterRefresh(page, { resetToFirstPage });
@@ -234,6 +479,13 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
       return;
     }
     await fetchBackgrounds(nextPage);
+  };
+
+  const refreshCategoriesAndBackgrounds = async () => {
+    await Promise.all([
+      fetchCategories(),
+      refreshBackgrounds(),
+    ]);
   };
 
   const handlePrevPage = () => {
@@ -344,15 +596,19 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
             <button className="tiny-chip" type="button" onClick={handleSyncRemote} disabled={syncing || importing}>
               {syncing ? '同步中...' : '同步'}
             </button>
+            <button className="tiny-chip" type="button" onClick={() => setCategoryModalOpen(true)} disabled={syncing || importing}>
+              类型管理
+            </button>
             <button className="tiny-chip active" type="button" onClick={() => refreshBackgrounds()} disabled={loading || syncing || importing}>
               {loading ? '刷新中...' : '本地库'}
             </button>
           </div>
         </div>
         <div className="table-shell">
-          <div className="table-header table-grid">
+          <div className="table-header table-grid" style={tableGridStyle}>
             <span>图片名称</span>
             <span>缩略图</span>
+            <span>类型</span>
             <span>Wan 提示词</span>
             <span>Gemini 提示词</span>
             <span>GPT 提示词</span>
@@ -364,17 +620,19 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
             <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>暂无背景图数据</div>
           ) : (
             backgrounds.map((row) => (
-              <div className="table-row table-grid" key={row.id}>
+              <div className="table-row table-grid" key={row.id} style={tableGridStyle}>
                 <span title={row.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name || '-'}</span>
                 <div 
                   className="thumb-swatch" 
                   style={{ backgroundImage: row.image_url ? `url(/api/v1/images/thumbnail?url=${encodeURIComponent(row.image_url)}&w=150&h=150)` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }} 
                 />
+                <span title={formatCategoryList(row.categories)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCategoryList(row.categories)}</span>
                 <span title={row.wan_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.wan_prompt_zh || '-'}</span>
                 <span title={row.gemini_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gemini_prompt_zh || '-'}</span>
                 <span title={row.gpt_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gpt_prompt_zh || '-'}</span>
                 <div className="table-actions">
                   {row.image_url && <button className="mini-outline" type="button" onClick={() => setPreviewingItem(row)}>查看原图</button>}
+                  <button className="mini-outline" type="button" onClick={() => setCategoryBindingItem(row)}>选择类型</button>
                   <button className="mini-outline" type="button" onClick={() => setEditingItem(row)}>编辑</button>
                   <button className="mini-outline" type="button" onClick={() => handleDelete(row.id)}>删除</button>
                 </div>
@@ -408,6 +666,24 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
         <OriginalImagePreviewModal
           item={previewingItem}
           onClose={() => setPreviewingItem(null)}
+        />
+      )}
+      {categoryModalOpen && (
+        <BackgroundCategoryManagerModal
+          categories={categories}
+          onClose={() => setCategoryModalOpen(false)}
+          onChanged={refreshCategoriesAndBackgrounds}
+        />
+      )}
+      {categoryBindingItem && (
+        <BackgroundCategoryBindingModal
+          item={categoryBindingItem}
+          categories={categories}
+          onClose={() => setCategoryBindingItem(null)}
+          onSaved={async () => {
+            setCategoryBindingItem(null);
+            await refreshBackgrounds();
+          }}
         />
       )}
     </SimpleFrame>
