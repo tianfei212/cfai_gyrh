@@ -289,3 +289,61 @@ func TestBackgroundPromptRepoDeleteRemovesCategoryBindings(t *testing.T) {
 		t.Fatalf("category background IDs after prompt delete = %+v, want none", backgroundIDs)
 	}
 }
+
+func TestBackgroundPromptRepoListByCategoryKeepsPagination(t *testing.T) {
+	testDB := newCategoryTestDB(t)
+	backgroundRepo := NewBackgroundPromptRepo(testDB)
+	categoryRepo := NewBackgroundCategoryRepo(testDB)
+	categoryID, err := categoryRepo.Create("文旅片", "四川大佛")
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+
+	firstID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "first")
+	secondID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "second")
+	_ = createBackgroundPromptForCategoryTest(t, backgroundRepo, "unbound")
+	if err := categoryRepo.ReplaceBackgroundBindings(firstID, []int64{categoryID}); err != nil {
+		t.Fatalf("bind first: %v", err)
+	}
+	if err := categoryRepo.ReplaceBackgroundBindings(secondID, []int64{categoryID}); err != nil {
+		t.Fatalf("bind second: %v", err)
+	}
+
+	items, err := backgroundRepo.ListByCategory(categoryID, 1, 0)
+	if err != nil {
+		t.Fatalf("list by category: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items len = %d, want 1", len(items))
+	}
+
+	total, err := backgroundRepo.CountByCategory(categoryID)
+	if err != nil {
+		t.Fatalf("count by category: %v", err)
+	}
+	if total != 2 {
+		t.Fatalf("total = %d, want 2", total)
+	}
+}
+
+func TestBackgroundPromptRepoListByMissingCategoryReturnsEmpty(t *testing.T) {
+	testDB := newCategoryTestDB(t)
+	backgroundRepo := NewBackgroundPromptRepo(testDB)
+	_ = createBackgroundPromptForCategoryTest(t, backgroundRepo, "first")
+
+	items, err := backgroundRepo.ListByCategory(99999, 10, 0)
+	if err != nil {
+		t.Fatalf("list by missing category: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("items len = %d, want 0", len(items))
+	}
+
+	total, err := backgroundRepo.CountByCategory(99999)
+	if err != nil {
+		t.Fatalf("count by missing category: %v", err)
+	}
+	if total != 0 {
+		t.Fatalf("total = %d, want 0", total)
+	}
+}
