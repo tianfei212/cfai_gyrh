@@ -14,6 +14,7 @@ function formatCategoryLabel(category) {
 
 export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, onPreview, model }) {
   const fileInputRef = useRef(null);
+  const backgroundRequestSeq = useRef(0);
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [backgrounds, setBackgrounds] = useState([]);
@@ -28,15 +29,24 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
   const totalPages = getTotalPages(total, limit);
 
   const fetchBackgrounds = async () => {
+    const requestId = backgroundRequestSeq.current + 1;
+    backgroundRequestSeq.current = requestId;
     try {
       setLoading(true);
       const data = await fetchApi(buildBackgroundPromptListUrl(page, limit, { categoryId: selectedCategoryId }));
+      if (requestId !== backgroundRequestSeq.current) {
+        return;
+      }
       setBackgrounds(data.items || data.prompts || []);
       setTotal(data.total || 0);
     } catch (err) {
-      console.error('Failed to fetch backgrounds:', err);
+      if (requestId === backgroundRequestSeq.current) {
+        console.error('Failed to fetch backgrounds:', err);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === backgroundRequestSeq.current) {
+        setLoading(false);
+      }
     }
   };
 
