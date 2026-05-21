@@ -75,6 +75,8 @@ func RegisterRoutes(
 	protected.HandleFunc("/background-prompts/suggest-defaults", backgroundPromptHandler.SuggestDefaults).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/sync-remote", backgroundPromptHandler.SyncRemote).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/sync-english", backgroundPromptHandler.SyncEnglish).Methods(http.MethodPost)
+	protected.HandleFunc("/background-prompts/{id}/categories", backgroundPromptHandler.ListCategories).Methods(http.MethodGet)
+	protected.HandleFunc("/background-prompts/{id}/categories", backgroundPromptHandler.UpdateCategories).Methods(http.MethodPut)
 	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Get).Methods(http.MethodGet)
 	protected.HandleFunc("/background-prompts", backgroundPromptHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Update).Methods(http.MethodPut)

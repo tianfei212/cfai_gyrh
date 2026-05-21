@@ -107,7 +107,7 @@ func Run(ctx context.Context) error {
 	referenceHandler := handler.NewReferenceHandler(referenceRepo, storageService)
 	skillHandler := handler.NewSkillHandler(skillRepo)
 	llmPromptTemplateHandler := handler.NewLLMPromptTemplateHandler(llmPromptTemplateRepo)
-	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor)
+	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor, backgroundCategoryRepo)
 	backgroundCategoryHandler := handler.NewBackgroundCategoryHandler(backgroundCategoryRepo)
 	stylePromptHandler := handler.NewStylePromptHandler(stylePromptRepo)
 

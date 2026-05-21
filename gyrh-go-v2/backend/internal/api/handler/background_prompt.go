@@ -30,14 +30,16 @@ type BackgroundPromptHandler struct {
 	repo           *db.BackgroundPromptRepo
 	storageService storage.StorageService
 	qwenAdvisor    qwen.Advisor
+	categoryRepo   *db.BackgroundCategoryRepo
 }
 
 // NewBackgroundPromptHandler 创建背景图提示词处理器。
-func NewBackgroundPromptHandler(repo *db.BackgroundPromptRepo, storageService storage.StorageService, qwenAdvisor qwen.Advisor) *BackgroundPromptHandler {
+func NewBackgroundPromptHandler(repo *db.BackgroundPromptRepo, storageService storage.StorageService, qwenAdvisor qwen.Advisor, categoryRepo *db.BackgroundCategoryRepo) *BackgroundPromptHandler {
 	return &BackgroundPromptHandler{
 		repo:           repo,
 		storageService: storageService,
 		qwenAdvisor:    qwenAdvisor,
+		categoryRepo:   categoryRepo,
 	}
 }
 
@@ -72,25 +74,55 @@ type remoteSyncResult struct {
 	Failures []remoteSyncFailure `json:"failures"`
 }
 
+func parseOptionalInt64Query(r *http.Request, key string) (int64, error) {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return 0, nil
+	}
+	return strconv.ParseInt(value, 10, 64)
+}
+
 // List 返回背景图提示词模板列表。
 func (h *BackgroundPromptHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePage(r)
 
-	items, err := h.repo.List(limit, offset)
+	categoryID, err := parseOptionalInt64Query(r, "category_id")
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "无效的背景分类 ID"))
+		return
+	}
+
+	var items []*db.BackgroundPrompt
+	if categoryID > 0 {
+		items, err = h.repo.ListByCategory(categoryID, limit, offset)
+	} else {
+		items, err = h.repo.List(limit, offset)
+	}
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "查询背景图提示词模板失败"))
 		return
 	}
 
-	total, err := h.repo.Count()
+	var total int64
+	if categoryID > 0 {
+		total, err = h.repo.CountByCategory(categoryID)
+	} else {
+		total, err = h.repo.Count()
+	}
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "统计背景图提示词模板失败"))
 		return
 	}
 
+	categoriesByBackgroundID, err := h.listCategoriesByBackgroundIDs(items)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "查询背景图提示词分类失败"))
+		return
+	}
+
 	result := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		result = append(result, h.toBackgroundPromptItem(r.Context(), item))
+		result = append(result, h.toBackgroundPromptItemWithCategories(r.Context(), item, categoriesByBackgroundID[item.ID]))
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, httpx.Success(map[string]any{
@@ -116,6 +148,66 @@ func (h *BackgroundPromptHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toBackgroundPromptItem(r.Context(), item)))
+}
+
+// ListCategories 返回背景图提示词模板绑定的分类列表。
+func (h *BackgroundPromptHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDFromVars(r)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "无效的背景图提示词模板 ID"))
+		return
+	}
+	if h.categoryRepo == nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "背景分类服务未初始化"))
+		return
+	}
+
+	if _, err := h.repo.GetByID(id); err != nil {
+		httpx.WriteJSON(w, http.StatusNotFound, httpx.Error(1, "背景图提示词模板不存在"))
+		return
+	}
+
+	items, err := h.categoryRepo.ListByBackgroundID(id)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "查询背景图提示词分类失败"))
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(items))
+}
+
+// UpdateCategories 替换背景图提示词模板绑定的分类列表。
+func (h *BackgroundPromptHandler) UpdateCategories(w http.ResponseWriter, r *http.Request) {
+	id, err := parseIDFromVars(r)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "无效的背景图提示词模板 ID"))
+		return
+	}
+	if h.categoryRepo == nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "背景分类服务未初始化"))
+		return
+	}
+
+	var req struct {
+		CategoryIDs []int64 `json:"category_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "请求体格式错误"))
+		return
+	}
+
+	if err := h.categoryRepo.ReplaceBackgroundBindings(id, req.CategoryIDs); err != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "更新背景图提示词分类失败"))
+		return
+	}
+
+	items, err := h.categoryRepo.ListByBackgroundID(id)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "查询背景图提示词分类失败"))
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(items))
 }
 
 // Create 创建背景图提示词模板。
@@ -175,6 +267,10 @@ func (h *BackgroundPromptHandler) Create(w http.ResponseWriter, r *http.Request)
 	)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "创建背景图提示词模板失败"))
+		return
+	}
+	if err := h.ensureDefaultCategoryBinding(id); err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "绑定默认背景分类失败"))
 		return
 	}
 
@@ -406,6 +502,11 @@ func (h *BackgroundPromptHandler) Import(w http.ResponseWriter, r *http.Request)
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "保存背景图记录失败"))
 		return
 	}
+	if err := h.ensureDefaultCategoryBinding(id); err != nil {
+		logger.Error("绑定默认背景分类失败: %v", err)
+		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "绑定默认背景分类失败"))
+		return
+	}
 	logger.Info("保存背景图提示词到数据库成功, id: %d", id)
 
 	item, err := h.repo.GetByID(id)
@@ -509,6 +610,38 @@ func (h *BackgroundPromptHandler) toBackgroundPromptItem(ctx context.Context, it
 		"created_at":                item.CreatedAt.Format(time.RFC3339),
 		"updated_at":                item.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+func (h *BackgroundPromptHandler) toBackgroundPromptItemWithCategories(ctx context.Context, item *db.BackgroundPrompt, categories []*db.BackgroundCategory) map[string]any {
+	result := h.toBackgroundPromptItem(ctx, item)
+	if categories == nil {
+		categories = []*db.BackgroundCategory{}
+	}
+	result["categories"] = categories
+	return result
+}
+
+func (h *BackgroundPromptHandler) listCategoriesByBackgroundIDs(items []*db.BackgroundPrompt) (map[int64][]*db.BackgroundCategory, error) {
+	result := make(map[int64][]*db.BackgroundCategory, len(items))
+	for _, item := range items {
+		result[item.ID] = []*db.BackgroundCategory{}
+	}
+	if len(items) == 0 || h.categoryRepo == nil {
+		return result, nil
+	}
+
+	ids := make([]int64, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+	return h.categoryRepo.ListByBackgroundIDs(ids)
+}
+
+func (h *BackgroundPromptHandler) ensureDefaultCategoryBinding(backgroundID int64) error {
+	if h.categoryRepo == nil {
+		return nil
+	}
+	return h.categoryRepo.EnsureDefaultBindingForBackground(backgroundID)
 }
 
 func decodeImageSize(data []byte) (int, int, error) {
@@ -634,7 +767,7 @@ func (h *BackgroundPromptHandler) importRemoteMediaItem(ctx context.Context, api
 	}
 
 	prompt := strings.TrimSpace(item.Prompt)
-	if _, err := h.repo.Create(
+	id, err := h.repo.Create(
 		name,
 		"",
 		"",
@@ -652,9 +785,13 @@ func (h *BackgroundPromptHandler) importRemoteMediaItem(ctx context.Context, api
 		"",
 		imageWidth,
 		imageHeight,
-	); err != nil {
+	)
+	if err != nil {
 		_ = h.storageService.Delete(context.Background(), assetID)
 		return fmt.Errorf("保存背景图记录失败")
+	}
+	if err := h.ensureDefaultCategoryBinding(id); err != nil {
+		return fmt.Errorf("绑定默认背景分类失败")
 	}
 
 	return nil
