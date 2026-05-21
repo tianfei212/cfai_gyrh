@@ -25,7 +25,30 @@ test('adds category filter to background prompt list URL when category is positi
     '/api/v1/background-prompts?limit=6&offset=6&category_id=9',
   );
   assert.equal(
+    buildBackgroundPromptListUrl(2, 6, { categoryId: '9' }),
+    '/api/v1/background-prompts?limit=6&offset=6&category_id=9',
+  );
+  assert.equal(
+    buildBackgroundPromptListUrl(2, 6, { categoryId: 9.7 }),
+    '/api/v1/background-prompts?limit=6&offset=6&category_id=9',
+  );
+});
+
+test('omits category filter for invalid category values', () => {
+  assert.equal(
     buildBackgroundPromptListUrl(1, 6, { categoryId: 0 }),
+    '/api/v1/background-prompts?limit=6&offset=0',
+  );
+  assert.equal(
+    buildBackgroundPromptListUrl(1, 6, { categoryId: -9 }),
+    '/api/v1/background-prompts?limit=6&offset=0',
+  );
+  assert.equal(
+    buildBackgroundPromptListUrl(1, 6, { categoryId: NaN }),
+    '/api/v1/background-prompts?limit=6&offset=0',
+  );
+  assert.equal(
+    buildBackgroundPromptListUrl(1, 6, { categoryId: 'not-a-number' }),
     '/api/v1/background-prompts?limit=6&offset=0',
   );
 });

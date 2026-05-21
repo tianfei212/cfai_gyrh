@@ -18,8 +18,9 @@ export function buildBackgroundPromptListUrl(page, limit = BACKGROUND_MANAGER_PA
     limit: String(safeLimit),
     offset: String(offset),
   });
-  if (Number.isFinite(categoryId) && categoryId > 0) {
-    params.set('category_id', String(Math.floor(categoryId)));
+  const safeCategoryId = Number(categoryId);
+  if (Number.isFinite(safeCategoryId) && safeCategoryId > 0) {
+    params.set('category_id', String(Math.floor(safeCategoryId)));
   }
   return `/api/v1/background-prompts?${params.toString()}`;
 }
