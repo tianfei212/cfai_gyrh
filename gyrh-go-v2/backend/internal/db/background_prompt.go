@@ -289,20 +289,26 @@ func (r *BackgroundPromptRepo) Update(id int64, patch BackgroundPromptPatch) err
 
 // Delete 删除背景图提示词模板。
 func (r *BackgroundPromptRepo) Delete(id int64) error {
-	result, err := r.db.Exec("DELETE FROM background_prompts WHERE id = ?", id)
-	if err != nil {
-		return fmt.Errorf("删除背景图提示词模板失败: %w", err)
-	}
+	return r.db.Transaction(func(tx *sql.Tx) error {
+		if _, err := tx.Exec("DELETE FROM background_category_bindings WHERE background_prompt_id = ?", id); err != nil {
+			return fmt.Errorf("删除背景图提示词分类绑定失败: %w", err)
+		}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("获取受影响行数失败: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("背景图提示词模板不存在: id=%d", id)
-	}
+		result, err := tx.Exec("DELETE FROM background_prompts WHERE id = ?", id)
+		if err != nil {
+			return fmt.Errorf("删除背景图提示词模板失败: %w", err)
+		}
 
-	return nil
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("获取受影响行数失败: %w", err)
+		}
+		if rowsAffected == 0 {
+			return fmt.Errorf("背景图提示词模板不存在: id=%d", id)
+		}
+
+		return nil
+	})
 }
 
 // Count 获取背景图提示词模板总数。

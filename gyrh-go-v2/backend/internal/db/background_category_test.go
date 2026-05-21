@@ -262,3 +262,30 @@ func TestBackgroundCategoryRepoDeletesBackgroundBindings(t *testing.T) {
 		t.Fatalf("category background IDs after cleanup = %+v, want none", backgroundIDs)
 	}
 }
+
+func TestBackgroundPromptRepoDeleteRemovesCategoryBindings(t *testing.T) {
+	testDB := newCategoryTestDB(t)
+	backgroundRepo := NewBackgroundPromptRepo(testDB)
+	categoryRepo := NewBackgroundCategoryRepo(testDB)
+	backgroundID := createBackgroundPromptForCategoryTest(t, backgroundRepo, "bg")
+
+	categoryID, err := categoryRepo.Create("文旅片", "四川大佛")
+	if err != nil {
+		t.Fatalf("create category: %v", err)
+	}
+	if err := categoryRepo.ReplaceBackgroundBindings(backgroundID, []int64{categoryID}); err != nil {
+		t.Fatalf("bind background: %v", err)
+	}
+
+	if err := backgroundRepo.Delete(backgroundID); err != nil {
+		t.Fatalf("delete background prompt: %v", err)
+	}
+
+	backgroundIDs, err := categoryRepo.ListBackgroundIDs(categoryID)
+	if err != nil {
+		t.Fatalf("list category backgrounds: %v", err)
+	}
+	if len(backgroundIDs) != 0 {
+		t.Fatalf("category background IDs after prompt delete = %+v, want none", backgroundIDs)
+	}
+}
