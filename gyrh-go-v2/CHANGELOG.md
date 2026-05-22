@@ -5,6 +5,34 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-22 23:26
+
+- 分支：`main`
+- 目的：为工作台背景图库增加全图放大预览，并修正弹窗在全终端适配下产生长滚动的问题。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`fe96815`
+
+### 说明
+
+- 在工作台背景图库卡片右上角新增放大镜 HUD 图标，点击后通过后端 OSS 全图 WebP 地址打开大图预览。
+- 预览弹窗改为 React Portal 渲染到 `document.body`，避免被工作台外层滚动容器影响。
+- 弹窗、图片舞台和图片本身使用百分比约束与 `object-fit: contain`，禁止内部长滚动，保持移动端和桌面端视口内可见。
+- 关闭入口改为 `X` 图标按钮，放大入口改为放大镜图标按钮。
+
+### 修改文件
+
+- `frontend/src/screens/DashboardScreen.jsx`：新增背景图全图预览状态、Portal 弹窗、放大镜入口和 `X` 关闭按钮。
+- `frontend/src/styles.css`：新增图库放大镜按钮与预览弹窗响应式布局样式。
+- `frontend/src/utils/imageThumbs.js`：新增全图预览 URL 构建工具，优先使用 OSS 原图地址。
+- `frontend/src/utils/imageThumbs.test.js`：补充全图预览 URL 构建测试。
+
+### 验证
+
+- 前端单元测试通过：`npm test`，45/45 通过。
+- 前端生产构建通过：`npm run build -- --outDir ../backend/internal/frontend/dist --emptyOutDir`。
+- 已重启前端、后端、背景 OSS 与生成图 OSS，本地端口 `9912`、`9913`、`18080`、`18081` 均处于监听状态。
+- 嵌入式前端资源已更新到 `/assets/index-tdw_bnPy.js` 与 `/assets/index-vaheVFXX.css`。
+
 ## 2026-05-22 22:46
 
 - 分支：`main`
