@@ -5,6 +5,55 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-22 17:08
+
+- 分支：`feature/fullscreen-responsive-adaptation`
+- 目的：修复 macOS 单二进制测试中“预览页点击风格转换时报 `TypeError: Failed to fetch`”的问题；同时记录本次 release 单二进制收敛、背景图库排序调整和验证范围。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：本条记录随本次提交生成。
+
+### 本次问题
+
+- 在 macOS ARM64 单二进制包 `release/gyrh-go-v2-202605221415-1dfeee6-darwin-arm64` 中验证风格转换时，浏览器控制台报错：`Style transfer failed: TypeError: Failed to fetch`。
+- 后端日志没有出现对应的 `POST /api/v1/images/rewrite` 请求，说明失败发生在前端真正调用 rewrite API 之前。
+- 当预览页来源是历史记录或已生成图时，前端只保留了 OSS 签名图片 URL，没有继续携带数据库返回的 `asset_id`。点击风格转换时，前端尝试直接 `fetch(OSS 签名图)` 下载图片并转 base64，浏览器会受 OSS CORS 限制而抛出 `Failed to fetch`。
+
+### 解决方案
+
+- 保留历史记录中的 `asset_id`，并在进入预览页时随预览选择一起传递，不再只传图片 URL。
+- `PreviewScreen` 在发起风格转换时优先使用 `foreground_asset_id`，让后端通过已有素材 ID 读取图片，避免浏览器跨域抓取 OSS 签名图。
+- 保留原有降级逻辑：只有没有 `asset_id` 的本地上传图或 data URL 才继续走 base64。
+- 背景图库排序按用户要求由 `updated_at DESC, id DESC` 改为 `name DESC, id DESC`，即按提示词名称倒序；新增 DB 层回归测试。
+- `scripts/build_release.sh` 不再把 `frontend/dist` 作为冗余目录复制进 Ubuntu release 包，release 包仅依赖 `bin/gyrh-server` 中内嵌的前端资源，避免远端误用第二套前端文件。
+
+### 修改文件
+
+- `frontend/src/utils/historyRecords.js`：历史记录映射新增 `assetId`，预览 payload 继续携带该字段。
+- `frontend/src/utils/historyRecords.test.js`：新增历史记录 `assetId` 保留与传递断言。
+- `frontend/src/utils/previewSelection.js`：预览选择规范化时保留 `assetId`，普通字符串预览保持空 `assetId`。
+- `frontend/src/utils/previewSelection.test.js`：覆盖普通图片与历史单图预览的 `assetId` 语义。
+- `frontend/src/app/AppShell.jsx`：新增 `capturedAssetId` 状态，并随 `PreviewScreen` props 传递。
+- `frontend/src/screens/PreviewScreen.jsx`：风格转换 payload 优先使用 `capturedAssetId` 作为 `foreground_asset_id`。
+- `backend/internal/db/background_prompt.go`：背景图库列表 SQL 排序改为 `ORDER BY name DESC, id DESC`。
+- `backend/internal/db/background_prompt_test.go`：新增背景提示词列表按名称倒序的回归测试。
+- `scripts/build_release.sh`：Ubuntu release 构建仍先把最新 `frontend/dist` 写入 Go embed 目录，但不再把 `frontend/dist` 复制进 release 包。
+- `CHANGELOG.md`：新增本次问题、根因、解决方案、文件清单和验证记录。
+
+### 验证
+
+- 先运行新增 DB 排序测试，旧逻辑失败：`go test ./internal/db -run TestBackgroundPromptRepoListOrdersByNameDesc -count=1`。
+- 修改排序后通过：`go test ./internal/db ./internal/api/handler`。
+- 先运行历史预览 `assetId` 测试，旧逻辑失败；修复后通过：`node --test src/utils/historyRecords.test.js src/utils/previewSelection.test.js`。
+- 前端构建通过：`npm run build`，生成新入口 `/assets/index-DiGlKjB2.js`。
+- linter 检查通过，触达文件无诊断错误。
+- 重新生成并启动 macOS ARM64 单二进制测试包：`release/gyrh-go-v2-202605221700-1dfeee6-darwin-arm64.tar.gz`。
+- 当前本地测试服务 `http://127.0.0.1:9913/admin_viewer` 返回新前端入口 `/assets/index-DiGlKjB2.js`，旧入口 `/assets/index-CgIcyYDU.js` 已不再由该服务返回。
+- 验证新 macOS 二进制内嵌新前端入口，SHA256：`1fb4977350cfa345baacd97e3a0248db1bc248459a3f52d12c14e5ca9fba893e`。
+
+### 未提交内容说明
+
+- 本次提交不包含 `backend/data/gyrh.db*`、`release/`、`.cache/`、`bin/302helpper-*`、`../gyrh-go-v2.zip` 等运行、缓存和打包产物。
+
 ## 2026-05-22 00:53
 
 - 分支：`feature/fullscreen-responsive-adaptation`

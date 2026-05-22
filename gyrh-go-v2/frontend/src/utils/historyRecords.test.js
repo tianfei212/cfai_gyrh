@@ -48,6 +48,7 @@ test('maps generated images to newest-first history records without reordering',
     records[0].url,
     '/api/v1/images/thumbnail?asset_id=generated%3Anewest.png&w=400&h=225&rv=7',
   );
+  assert.equal(records[0].assetId, 'generated:newest.png');
   assert.equal(records[0].rawUrl, 'https://example.com/newest.png');
   assert.equal(records[1].provider, 'google');
   assert.equal(records[1].width, 0);
@@ -64,10 +65,12 @@ test('builds single-image preview payload from a history record', () => {
       id: 1,
       url: '/api/v1/images/thumbnail?asset_id=one&w=400&h=225',
       rawUrl: '/api/v1/images/view?id=1',
+      assetId: 'generated:one.png',
     }),
     {
       image: '/api/v1/images/view?id=1',
       mode: 'single',
+      assetId: 'generated:one.png',
     },
   );
 });

@@ -3,11 +3,13 @@ export function normalizePreviewSelection(selection) {
     return {
       image: selection.image,
       mode: selection.mode === 'single' ? 'single' : 'compare',
+      assetId: selection.assetId || '',
     };
   }
 
   return {
     image: selection,
     mode: 'compare',
+    assetId: '',
   };
 }

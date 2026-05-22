@@ -5,6 +5,7 @@ export function mapGeneratedImagesToHistoryRecords(images = []) {
     id: img.id,
     url: buildImageThumbnailUrl({ assetId: img.asset_id, imageUrl: img.image_url }),
     rawUrl: img.image_url || `/api/v1/images/view?id=${img.id}`,
+    assetId: img.asset_id || '',
     provider: img.provider || img.style_transform,
     status: img.status,
     created_at: img.created_at,
@@ -25,6 +26,7 @@ export function buildHistoryPreviewPayload(record) {
   return {
     image: record.rawUrl || record.url,
     mode: 'single',
+    assetId: record.assetId || '',
   };
 }
 

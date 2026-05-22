@@ -6,12 +6,14 @@ test('normalizes plain image values as compare preview mode', () => {
   assert.deepEqual(normalizePreviewSelection('/image.png'), {
     image: '/image.png',
     mode: 'compare',
+    assetId: '',
   });
 });
 
 test('preserves explicit single preview mode from history records', () => {
-  assert.deepEqual(normalizePreviewSelection({ image: '/history.png', mode: 'single' }), {
+  assert.deepEqual(normalizePreviewSelection({ image: '/history.png', mode: 'single', assetId: 'generated:one.png' }), {
     image: '/history.png',
     mode: 'single',
+    assetId: 'generated:one.png',
   });
 });

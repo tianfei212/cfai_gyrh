@@ -427,14 +427,13 @@ copy_config_files() {
 
 info "清理旧 release 目录"
 rm -rf "$STAGE_DIR"
-mkdir -p "$STAGE_DIR/bin" "$STAGE_DIR/backend/data" "$STAGE_DIR/frontend" "$STAGE_DIR/configs" "$STAGE_DIR/scripts"
+mkdir -p "$STAGE_DIR/bin" "$STAGE_DIR/backend/data" "$STAGE_DIR/configs" "$STAGE_DIR/scripts"
 
 info "构建前端静态文件"
 (cd "$ROOT_DIR/frontend" && npm run build)
 rm -rf "$ROOT_DIR/backend/internal/frontend/dist"
 mkdir -p "$ROOT_DIR/backend/internal/frontend"
 cp -a "$ROOT_DIR/frontend/dist" "$ROOT_DIR/backend/internal/frontend/"
-cp -a "$ROOT_DIR/frontend/dist" "$STAGE_DIR/frontend/"
 
 info "构建 Ubuntu amd64 后端二进制"
 build_backend_linux_amd64 "$STAGE_DIR/bin/gyrh-server"

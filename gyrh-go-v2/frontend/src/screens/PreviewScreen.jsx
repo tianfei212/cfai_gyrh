@@ -8,7 +8,7 @@ import { resolveRewriteResponse } from '../services/rewriteTask';
 import { appendImageCacheBucket } from '../utils/imageThumbs';
 import { getProviderForModel } from '../utils/modelProvider';
 
-export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, previewMode = 'compare', onPreview, branding = DEFAULT_BRANDING }) {
+export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, capturedAssetId = '', previewMode = 'compare', onPreview, branding = DEFAULT_BRANDING }) {
   const [showQR, setShowQR] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
@@ -64,7 +64,9 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       let isLocalBase64 = false;
       let foregroundAssetId = '';
       
-      if (originalImage.startsWith('/api/v1/images/view/')) {
+      if (capturedAssetId) {
+        foregroundAssetId = capturedAssetId;
+      } else if (originalImage.startsWith('/api/v1/images/view/')) {
         foregroundAssetId = originalImage.replace('/api/v1/images/view/', '').split('?')[0];
       } else if (originalImage.startsWith('http')) {
         try {

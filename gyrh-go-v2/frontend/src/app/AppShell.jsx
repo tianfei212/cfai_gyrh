@@ -25,6 +25,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
   const [model, setModel] = useState('G'); // W: Wan, G: Gemini, GPT: 302 GPT Image
   const [selectedBg, setSelectedBg] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
+  const [capturedAssetId, setCapturedAssetId] = useState('');
   const [previewMode, setPreviewMode] = useState('compare');
   const backgroundCacheRef = useRef(null);
 
@@ -69,6 +70,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
   const goPreview = (selection) => {
     const nextPreview = normalizePreviewSelection(selection);
     setCapturedImage(nextPreview.image);
+    setCapturedAssetId(nextPreview.assetId);
     setPreviewMode(nextPreview.mode);
     changeScreen('preview');
   };
@@ -91,6 +93,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
     model,
     selectedBg,
     capturedImage,
+    capturedAssetId,
     previewMode,
     branding,
     mode,
