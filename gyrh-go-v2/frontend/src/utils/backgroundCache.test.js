@@ -44,3 +44,28 @@ test('background cache can invalidate one page or all pages', async () => {
   assert.strictEqual(cachedPageTwo, pageTwo);
   assert.notStrictEqual(refreshedPageTwo, pageTwo);
 });
+
+test('background cache keeps category pages isolated', async () => {
+  const requests = [];
+  const cache = createBackgroundCache({
+    fetchPage: async ({ page, limit, categoryId }) => {
+      requests.push({ page, limit, categoryId });
+      return {
+        items: [{ id: `${page}:${categoryId}` }],
+        total: 1,
+      };
+    },
+  });
+
+  const allBackgrounds = await cache.loadPage(1, { limit: 6, categoryId: 0 });
+  const categoryBackgrounds = await cache.loadPage(1, { limit: 6, categoryId: 7 });
+  const cachedCategoryBackgrounds = await cache.loadPage(1, { limit: 6, categoryId: 7 });
+
+  assert.deepEqual(allBackgrounds.items, [{ id: '1:0' }]);
+  assert.deepEqual(categoryBackgrounds.items, [{ id: '1:7' }]);
+  assert.strictEqual(cachedCategoryBackgrounds, categoryBackgrounds);
+  assert.deepEqual(requests, [
+    { page: 1, limit: 6, categoryId: 0 },
+    { page: 1, limit: 6, categoryId: 7 },
+  ]);
+});

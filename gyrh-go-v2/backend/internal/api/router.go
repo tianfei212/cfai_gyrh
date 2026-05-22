@@ -20,6 +20,7 @@ func RegisterRoutes(
 	skillHandler *handler.SkillHandler,
 	llmPromptTemplateHandler *handler.LLMPromptTemplateHandler,
 	backgroundPromptHandler *handler.BackgroundPromptHandler,
+	backgroundCategoryHandler *handler.BackgroundCategoryHandler,
 	stylePromptHandler *handler.StylePromptHandler,
 	authConfig *middleware.AuthConfig,
 ) {
@@ -64,11 +65,18 @@ func RegisterRoutes(
 	protected.HandleFunc("/llm-prompt-templates/{id}", llmPromptTemplateHandler.Update).Methods(http.MethodPut)
 	protected.HandleFunc("/llm-prompt-templates/{id}", llmPromptTemplateHandler.Delete).Methods(http.MethodDelete)
 
+	protected.HandleFunc("/background-categories", backgroundCategoryHandler.List).Methods(http.MethodGet)
+	protected.HandleFunc("/background-categories", backgroundCategoryHandler.Create).Methods(http.MethodPost)
+	protected.HandleFunc("/background-categories/{id}", backgroundCategoryHandler.Update).Methods(http.MethodPut)
+	protected.HandleFunc("/background-categories/{id}", backgroundCategoryHandler.Delete).Methods(http.MethodDelete)
+
 	protected.HandleFunc("/background-prompts", backgroundPromptHandler.List).Methods(http.MethodGet)
 	protected.HandleFunc("/background-prompts/import", backgroundPromptHandler.Import).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/suggest-defaults", backgroundPromptHandler.SuggestDefaults).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/sync-remote", backgroundPromptHandler.SyncRemote).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/sync-english", backgroundPromptHandler.SyncEnglish).Methods(http.MethodPost)
+	protected.HandleFunc("/background-prompts/{id}/categories", backgroundPromptHandler.ListCategories).Methods(http.MethodGet)
+	protected.HandleFunc("/background-prompts/{id}/categories", backgroundPromptHandler.UpdateCategories).Methods(http.MethodPut)
 	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Get).Methods(http.MethodGet)
 	protected.HandleFunc("/background-prompts", backgroundPromptHandler.Create).Methods(http.MethodPost)
 	protected.HandleFunc("/background-prompts/{id}", backgroundPromptHandler.Update).Methods(http.MethodPut)

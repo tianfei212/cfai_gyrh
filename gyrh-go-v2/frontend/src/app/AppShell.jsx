@@ -31,7 +31,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
 
   if (!backgroundCacheRef.current) {
     backgroundCacheRef.current = createBackgroundCache({
-      fetchPage: async ({ page, limit }) => fetchApi(buildBackgroundPromptListUrl(page, limit)),
+      fetchPage: async ({ page, limit, categoryId }) => fetchApi(buildBackgroundPromptListUrl(page, limit, { categoryId })),
     });
   }
 

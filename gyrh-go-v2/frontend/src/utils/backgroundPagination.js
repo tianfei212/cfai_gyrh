@@ -10,11 +10,19 @@ export function getTotalPages(total, limit = BACKGROUND_MANAGER_PAGE_SIZE) {
   return Math.max(1, Math.ceil(safeTotal / safeLimit));
 }
 
-export function buildBackgroundPromptListUrl(page, limit = BACKGROUND_MANAGER_PAGE_SIZE) {
+export function buildBackgroundPromptListUrl(page, limit = BACKGROUND_MANAGER_PAGE_SIZE, { categoryId = 0 } = {}) {
   const safePage = getSafePage(page);
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : BACKGROUND_MANAGER_PAGE_SIZE;
   const offset = (safePage - 1) * safeLimit;
-  return `/api/v1/background-prompts?limit=${safeLimit}&offset=${offset}`;
+  const params = new URLSearchParams({
+    limit: String(safeLimit),
+    offset: String(offset),
+  });
+  const safeCategoryId = Number(categoryId);
+  if (Number.isFinite(safeCategoryId) && safeCategoryId > 0) {
+    params.set('category_id', String(Math.floor(safeCategoryId)));
+  }
+  return `/api/v1/background-prompts?${params.toString()}`;
 }
 
 export function getPageAfterRefresh(currentPage, { resetToFirstPage = false } = {}) {
