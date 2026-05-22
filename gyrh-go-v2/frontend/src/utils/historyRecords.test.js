@@ -6,6 +6,17 @@ import {
   getHistoryPageAfterDeletion,
   mapGeneratedImagesToHistoryRecords,
 } from './historyRecords.js';
+import { IMAGE_CACHE_BUCKET_MS } from './imageThumbs.js';
+
+const originalDateNow = Date.now;
+
+test.beforeEach(() => {
+  Date.now = () => IMAGE_CACHE_BUCKET_MS * 7;
+});
+
+test.afterEach(() => {
+  Date.now = originalDateNow;
+});
 
 test('maps generated images to newest-first history records without reordering', () => {
   const records = mapGeneratedImagesToHistoryRecords([
@@ -35,7 +46,7 @@ test('maps generated images to newest-first history records without reordering',
   );
   assert.equal(
     records[0].url,
-    '/api/v1/images/thumbnail?asset_id=generated%3Anewest.png&w=400&h=225',
+    '/api/v1/images/thumbnail?asset_id=generated%3Anewest.png&w=400&h=225&rv=7',
   );
   assert.equal(records[0].rawUrl, 'https://example.com/newest.png');
   assert.equal(records[1].provider, 'google');

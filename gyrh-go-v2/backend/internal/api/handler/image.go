@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"io"
@@ -24,6 +23,11 @@ import (
 	"gyrh-go-v2/backend/pkg/httpx"
 
 	"github.com/gorilla/mux"
+)
+
+const (
+	immutableImageCacheControl = "public, max-age=31536000, immutable"
+	dynamicImageCacheControl   = "public, max-age=180"
 )
 
 // ImageHandler 图像处理器，提供图像的列表、下载、查看、上传、改写和删除功能
@@ -190,7 +194,7 @@ func (h *ImageHandler) View(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
-	w.Header().Set("Cache-Control", "public, max-age=31536000") // 缓存 1 年
+	w.Header().Set("Cache-Control", dynamicImageCacheControl)
 
 	// 流式写入图像数据
 	if _, err := w.Write(imageData); err != nil {
@@ -283,6 +287,7 @@ func (h *ImageHandler) Thumbnail(ctx context.Context, w http.ResponseWriter, r *
 	logger.Debug("生成的缩略图 URL (thumbnailURL): %s", thumbnailURL)
 	logger.Debug("==================================================")
 
+	w.Header().Set("Cache-Control", dynamicImageCacheControl)
 	http.Redirect(w, r, thumbnailURL, http.StatusFound)
 	return nil
 }
@@ -459,9 +464,6 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	stylePrompt := req.effectiveStylePrompt(h.stylePromptRepo)
 	hasBackground := strings.TrimSpace(req.Background) != ""
 
-	if !hasBackground && req.BackgroundPromptID > 0 {
-		return writeJSONError(w, http.StatusBadRequest, "未提供背景图时不能传 background_prompt_id")
-	}
 	if hasBackground && stylePrompt != "" {
 		return writeJSONError(w, http.StatusBadRequest, "背景融合场景不支持 style_prompt")
 	}
@@ -469,72 +471,32 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	logger.Info("图像改写请求: provider=%s, background_prompt_id=%d, has_style_prompt=%t, references=%d",
 		req.Provider, req.BackgroundPromptID, stylePrompt != "", len(req.References))
 
-	inputs, err := h.prepareLLMInputs(ctx, req)
-	if err != nil {
-		return writeJSONError(w, http.StatusBadRequest, err.Error())
-	}
-	if persistErr := h.persistBackgroundImage(req, inputs); persistErr != nil {
-		logger.Error("背景图入库失败: %v", persistErr)
-		return writeJSONError(w, http.StatusInternalServerError, "背景图入库失败")
-	}
-
 	if h.llmService == nil {
 		return writeJSONError(w, http.StatusInternalServerError, "LLM 服务未初始化")
 	}
 
-	if req.Provider == "302-gpt-image" {
-		task := h.rewriteTasks.create()
-		if h.rewriteTaskRepo != nil {
-			if err := h.rewriteTaskRepo.Create(db.RewriteTaskCreateInput{
-				TaskID:             task.ID,
-				Provider:           req.Provider,
-				BackgroundPromptID: req.BackgroundPromptID,
-			}); err != nil {
-				logger.Error("创建图像改写任务记录失败: %v", err)
-				return writeJSONError(w, http.StatusInternalServerError, "创建图像改写任务失败")
-			}
-		}
-		started, err := h.llmService.StartCompose(ctx, llm.ComposeParams{
+	task := h.rewriteTasks.create()
+	if h.rewriteTaskRepo != nil {
+		if err := h.rewriteTaskRepo.Create(db.RewriteTaskCreateInput{
+			TaskID:             task.ID,
 			Provider:           req.Provider,
-			StylePrompt:        stylePrompt,
-			Images:             inputs,
 			BackgroundPromptID: req.BackgroundPromptID,
-		})
-		if err != nil {
-			if h.rewriteTaskRepo != nil {
-				_ = h.rewriteTaskRepo.Fail(task.ID, err.Error())
-			}
-			h.rewriteTasks.fail(task.ID, err)
-			return writeJSONError(w, http.StatusInternalServerError, "创建 302-gpt-image 任务失败")
+		}); err != nil {
+			logger.Error("创建图像改写任务记录失败: %v", err)
+			return writeJSONError(w, http.StatusInternalServerError, "创建图像改写任务失败")
 		}
-		if h.rewriteTaskRepo != nil {
-			if err := h.rewriteTaskRepo.SetExternalTaskID(task.ID, started.ExternalTaskID); err != nil {
-				logger.Error("保存 302-gpt-image 外部任务ID失败: %v", err)
-			}
-		}
-		go h.runAsyncRewrite(task.ID, rewriteJob{
-			Request:            req,
-			StylePrompt:        stylePrompt,
-			Inputs:             inputs,
-			BackgroundPromptID: req.BackgroundPromptID,
-			ExternalTaskID:     started.ExternalTaskID,
-		})
-		return writeJSON(w, http.StatusOK, RewriteResponse{
-			Success: true,
-			TaskID:  task.ID,
-			Status:  string(rewriteTaskRunning),
-			Message: "图像改写任务已创建",
-		})
 	}
-
-	resp, err := h.composeAndPersistRewrite(ctx, req, stylePrompt, inputs)
-	if err != nil {
-		if errors.Is(err, llm.ErrBackgroundPromptNotFound) {
-			return writeJSONError(w, http.StatusBadRequest, "背景图提示词模板不存在")
-		}
-		return writeJSONError(w, http.StatusInternalServerError, err.Error())
-	}
-	return writeJSON(w, http.StatusOK, resp)
+	go h.runAsyncRewrite(task.ID, rewriteJob{
+		Request:            req,
+		StylePrompt:        stylePrompt,
+		BackgroundPromptID: req.BackgroundPromptID,
+	})
+	return writeJSON(w, http.StatusOK, RewriteResponse{
+		Success: true,
+		TaskID:  task.ID,
+		Status:  string(rewriteTaskRunning),
+		Message: "图像改写任务已创建",
+	})
 }
 
 func (h *ImageHandler) composeAndPersistRewrite(ctx context.Context, req RewriteRequest, stylePrompt string, inputs []llm.ImageInput) (RewriteResponse, error) {
@@ -828,6 +790,14 @@ func (h *ImageHandler) prepareLLMInputs(ctx context.Context, req RewriteRequest)
 			return nil, fmt.Errorf("背景图无效: %w", err)
 		}
 		inputs = append(inputs, llm.ImageInput{Type: llm.ImageTypeBackground, AssetID: assetID})
+	} else if req.BackgroundPromptID > 0 {
+		assetID, err := h.backgroundAssetID(ctx, req.BackgroundPromptID)
+		if err != nil {
+			return nil, err
+		}
+		if assetID != "" {
+			inputs = append(inputs, llm.ImageInput{Type: llm.ImageTypeBackground, AssetID: assetID})
+		}
 	}
 
 	for _, ref := range req.References {
@@ -846,6 +816,21 @@ func (h *ImageHandler) prepareLLMInputs(ctx context.Context, req RewriteRequest)
 		return nil, fmt.Errorf("至少需要提供一张图片")
 	}
 	return inputs, nil
+}
+
+func (h *ImageHandler) backgroundAssetID(ctx context.Context, backgroundPromptID int64) (string, error) {
+	_ = ctx
+	if h.backgroundPromptRepo == nil {
+		return "", fmt.Errorf("背景图提示词仓库未初始化")
+	}
+	item, err := h.backgroundPromptRepo.GetByID(backgroundPromptID)
+	if err != nil {
+		return "", fmt.Errorf("%w: id=%d", llm.ErrBackgroundPromptNotFound, backgroundPromptID)
+	}
+	if strings.TrimSpace(item.ImageAssetID) == "" {
+		return "", fmt.Errorf("背景图提示词模板未绑定图片: id=%d", backgroundPromptID)
+	}
+	return strings.TrimSpace(item.ImageAssetID), nil
 }
 
 func (h *ImageHandler) saveBase64Asset(ctx context.Context, raw, prefix string) (string, error) {

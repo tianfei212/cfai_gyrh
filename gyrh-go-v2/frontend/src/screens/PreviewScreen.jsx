@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
+import { RefreshingImage } from '../components/RefreshingImage';
 import { DownloadIcon, XIcon } from '../components/Icons';
+import { buildScreenTitle, DEFAULT_BRANDING } from '../config/branding';
 import { fetchApi } from '../services/api';
 import { resolveRewriteResponse } from '../services/rewriteTask';
+import { appendImageCacheBucket } from '../utils/imageThumbs';
 import { getProviderForModel } from '../utils/modelProvider';
 
-export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, previewMode = 'compare', onPreview }) {
+export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, previewMode = 'compare', onPreview, branding = DEFAULT_BRANDING }) {
   const [showQR, setShowQR] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
@@ -82,7 +85,7 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
         } else {
           // 最后降级处理：尝试重新下载并转 base64
           const url = originalImage.startsWith('/api/v1/images/view') 
-            ? `/api/v1/images/thumbnail?url=${encodeURIComponent(originalImage)}&w=1080&h=1920` 
+            ? appendImageCacheBucket(`/api/v1/images/thumbnail?url=${encodeURIComponent(originalImage)}&w=1080&h=1920`) 
             : originalImage;
           const res = await fetch(url);
           const blob = await res.blob();
@@ -133,7 +136,7 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
 
   const getDisplayImageSrc = (imgSrc) => {
     return imgSrc && imgSrc.startsWith('/api/v1/images/view') 
-      ? `/api/v1/images/thumbnail?url=${encodeURIComponent(imgSrc)}&w=1080&h=1920` 
+      ? appendImageCacheBucket(`/api/v1/images/thumbnail?url=${encodeURIComponent(imgSrc)}&w=1080&h=1920`) 
       : imgSrc;
   };
 
@@ -164,7 +167,8 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
 
   return (
     <SimpleFrame 
-      title="AI Smart Portrait · 全屏预览与风格转换"
+      title={buildScreenTitle(branding, '全屏预览与风格转换')}
+      branding={branding}
       onHome={onHome}
       onHistory={onHistory}
       onLogout={onLogout}
@@ -179,20 +183,14 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
           </button>
         </div>
         <div
-          className="preview-stage-container"
-          style={{
-            display: 'flex',
-            gap: '20px',
-            padding: '0 20px',
-            justifyContent: isSinglePreview ? 'center' : 'stretch',
-          }}
+          className={`preview-stage-container ${isSinglePreview ? 'single-preview' : ''}`}
         >
           {/* Left: Original Image */}
           {!isSinglePreview && (
-          <div className="preview-stage" style={{ flex: 1, position: 'relative' }}>
+          <div className="preview-stage" style={{ position: 'relative' }}>
             {originalImage ? (
               <>
-                <img 
+                <RefreshingImage 
                   src={getDisplayImageSrc(originalImage)} 
                   alt="Original Portrait" 
                   className="full-preview-img"
@@ -213,13 +211,12 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
           <div
             className="preview-stage"
             style={{
-              flex: isSinglePreview ? '0 1 min(100%, 1080px)' : 1,
               position: 'relative',
             }}
           >
             {currentImage ? (
               <>
-                <img 
+                <RefreshingImage 
                   src={getDisplayImageSrc(currentImage)} 
                   alt="Style Transferred Portrait" 
                   className="full-preview-img"
@@ -232,10 +229,12 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                 
                 {/* HUB Style Logo Overlay (Bottom Left) */}
                 <div className="preview-hud-logo">
-                  <div className="hud-logo-mark"></div>
+                  <div className="hud-logo-mark">
+                    {branding.logo ? <img src={branding.logo} alt={`${branding.appName} logo`} /> : null}
+                  </div>
                   <div className="hud-logo-text">
-                    <span className="brand">GYRH</span>
-                    <span className="product">AI PORTRAIT</span>
+                    <span className="brand">{branding.previewWatermark.brand}</span>
+                    <span className="product">{branding.previewWatermark.product}</span>
                   </div>
                 </div>
 
@@ -358,14 +357,14 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
           >
             <XIcon />
           </button>
-          <img 
+          <RefreshingImage 
             src={getDisplayImageSrc(currentImage)} 
             alt="Fullscreen" 
             onClick={(event) => event.stopPropagation()}
             style={{
               width: '100vw',
-              height: '100vh',
-              objectFit: 'cover',
+              height: '100dvh',
+              objectFit: 'contain',
               display: 'block'
             }} 
           />

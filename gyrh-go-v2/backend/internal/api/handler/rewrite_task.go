@@ -180,6 +180,48 @@ type rewriteJob struct {
 
 func (h *ImageHandler) runAsyncRewrite(taskID string, job rewriteJob) {
 	ctx := context.Background()
+	if len(job.Inputs) == 0 && job.ExternalTaskID == "" {
+		inputs, err := h.prepareLLMInputs(ctx, job.Request)
+		if err != nil {
+			logger.Error("准备异步图像改写输入失败: task_id=%s, err=%v", taskID, err)
+			if h.rewriteTaskRepo != nil {
+				_ = h.rewriteTaskRepo.Fail(taskID, err.Error())
+			}
+			h.rewriteTasks.fail(taskID, err)
+			return
+		}
+		if persistErr := h.persistBackgroundImage(job.Request, inputs); persistErr != nil {
+			logger.Error("异步背景图入库失败: task_id=%s, err=%v", taskID, persistErr)
+			if h.rewriteTaskRepo != nil {
+				_ = h.rewriteTaskRepo.Fail(taskID, persistErr.Error())
+			}
+			h.rewriteTasks.fail(taskID, persistErr)
+			return
+		}
+		job.Inputs = inputs
+	}
+	if job.Request.Provider == "302-gpt-image" && job.ExternalTaskID == "" {
+		started, err := h.llmService.StartCompose(ctx, llm.ComposeParams{
+			Provider:           job.Request.Provider,
+			StylePrompt:        job.StylePrompt,
+			Images:             job.Inputs,
+			BackgroundPromptID: job.BackgroundPromptID,
+		})
+		if err != nil {
+			logger.Error("创建 302-gpt-image 异步任务失败: task_id=%s, err=%v", taskID, err)
+			if h.rewriteTaskRepo != nil {
+				_ = h.rewriteTaskRepo.Fail(taskID, err.Error())
+			}
+			h.rewriteTasks.fail(taskID, err)
+			return
+		}
+		job.ExternalTaskID = started.ExternalTaskID
+		if h.rewriteTaskRepo != nil {
+			if err := h.rewriteTaskRepo.SetExternalTaskID(taskID, started.ExternalTaskID); err != nil {
+				logger.Error("保存 302-gpt-image 外部任务ID失败: %v", err)
+			}
+		}
+	}
 	resp, err := h.waitAndPersistRewrite(ctx, job)
 	if err != nil {
 		logger.Error("异步图像改写失败: task_id=%s, err=%v", taskID, err)

@@ -41,3 +41,28 @@
 .app-mode-kiosk .status-pill {
   font-size: clamp(18px, 1vw, 24px);
 }
+
+@media (max-width: 1180px), (orientation: portrait) {
+  .app-mode-kiosk .canvas-frame {
+    width: 100%;
+    max-width: none;
+    min-height: var(--app-viewport-height);
+    aspect-ratio: auto;
+  }
+
+  .app-mode-kiosk .control-rail {
+    gap: 0.65rem;
+  }
+
+  .app-mode-kiosk .control-rail button {
+    min-width: clamp(112px, 24vw, 180px);
+    min-height: clamp(56px, 8vw, var(--gyrh-touch-primary));
+    font-size: clamp(16px, 3vw, 24px);
+  }
+}
+
+@media (max-height: 760px) {
+  .app-mode-kiosk .topbar {
+    min-height: auto;
+  }
+}

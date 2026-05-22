@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
 import { SimpleFrame } from '../components/Layout';
 import { CameraIcon, ClockIcon } from '../components/Icons';
+import { buildScreenTitle, DEFAULT_BRANDING } from '../config/branding';
 import { fetchApi } from '../services/api';
 import { resolveRewriteResponse } from '../services/rewriteTask';
 import {
@@ -9,9 +9,11 @@ import {
   getCenteredZoomCrop,
   getHorizontalMirrorTransform,
 } from '../utils/cameraZoom';
+import { buildCaptureBackgroundThumbnailUrl } from '../utils/imageThumbs';
+import { getSelfieSegmentationAssetUrl, loadSelfieSegmentationConstructor } from '../utils/mediapipeAssets';
 import { getProviderForModel } from '../utils/modelProvider';
 
-export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, model, selectedBg, onPreview }) {
+export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, model, selectedBg, onPreview, branding = DEFAULT_BRANDING }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [opacity, setOpacity] = useState(0.8);
@@ -41,17 +43,24 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       }
     }
 
-    // Initialize MediaPipe but don't run it yet
-    const selfieSegmentation = new SelfieSegmentation({
-      locateFile: (file) => `/models/selfie_segmentation/${file}`
-    });
-    selfieSegmentation.setOptions({
-      modelSelection: 1,
-      selfieMode: true,
-    });
-    selfieSegmentationRef.current = selfieSegmentation;
+    async function initializeSegmentation() {
+      try {
+        const SelfieSegmentation = await loadSelfieSegmentationConstructor();
+        const selfieSegmentation = new SelfieSegmentation({
+          locateFile: (file) => getSelfieSegmentationAssetUrl(file)
+        });
+        selfieSegmentation.setOptions({
+          modelSelection: 1,
+          selfieMode: true,
+        });
+        selfieSegmentationRef.current = selfieSegmentation;
+      } catch (err) {
+        console.error('Failed to initialize MediaPipe selfie segmentation:', err);
+      }
+    }
 
     startCamera();
+    initializeSegmentation();
 
     return () => {
       if (stream) {
@@ -85,7 +94,10 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
     if (typeof selectedBg === 'object' && selectedBg.image_url) {
       return (
         <img 
-          src={`/api/v1/images/thumbnail?url=${encodeURIComponent(selectedBg.image_url)}&w=1280&h=720`}
+          src={buildCaptureBackgroundThumbnailUrl({
+            assetId: selectedBg.image_asset_id,
+            imageUrl: selectedBg.image_url,
+          })}
           alt="Selected Background" 
           style={{
             position: 'absolute',
@@ -192,13 +204,6 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
         try {
           if (typeof selectedBg === 'object' && selectedBg.image_url) {
             backgroundPromptId = selectedBg.id;
-            const res = await fetch(selectedBg.image_url);
-            const blob = await res.blob();
-            backgroundBase64 = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result.split(',')[1]);
-              reader.readAsDataURL(blob);
-            });
           } else if (typeof selectedBg === 'string' && (selectedBg.startsWith('blob:') || selectedBg.startsWith('http'))) {
             const res = await fetch(selectedBg);
             const blob = await res.blob();
@@ -221,9 +226,9 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
 
       if (backgroundBase64) {
         payload.background = backgroundBase64;
-        if (backgroundPromptId > 0) {
-          payload.background_prompt_id = backgroundPromptId;
-        }
+      }
+      if (backgroundPromptId > 0) {
+        payload.background_prompt_id = backgroundPromptId;
       }
 
       const rewriteData = await fetchApi('/api/v1/images/rewrite', {
@@ -252,7 +257,8 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
   return (
     <>
       <SimpleFrame 
-        title="AI Smart Portrait · 摄像头拍摄"
+        title={buildScreenTitle(branding, '摄像头拍摄')}
+        branding={branding}
         onHome={onHome}
         onHistory={onHistory}
         onLogout={onLogout}
@@ -332,7 +338,7 @@ export function CaptureScreen({ onHome, onHistory, onLogout, onToggleModel, mode
             <div className="camera-badge" style={{ zIndex: 3 }}>LIVE PREVIEW</div>
             <div className="capture-title" style={{ zIndex: 3 }}>
               <strong>{typeof selectedBg === 'object' ? selectedBg.name : '背景预览'}</strong>
-              <span>点击拍摄后，系统将为您生成证件照</span>
+              <span>点击拍摄</span>
             </div>
           </div>
           <div className="capture-actions">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
+import { buildScreenTitle, DEFAULT_BRANDING } from '../config/branding';
 import { fetchApi } from '../services/api';
 
 const SKILL_PROVIDER_OPTIONS = [
@@ -141,7 +142,7 @@ function SkillEditModal({ item, onClose, onSaved }) {
   );
 }
 
-export function SkillManagerScreen({ onHome, onHistory, onLogout, onToggleModel, model }) {
+export function SkillManagerScreen({ onHome, onHistory, onLogout, onToggleModel, model, branding = DEFAULT_BRANDING }) {
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] = useState(null);
@@ -194,7 +195,8 @@ export function SkillManagerScreen({ onHome, onHistory, onLogout, onToggleModel,
 
   return (
     <SimpleFrame 
-      title="AI Smart Portrait · SKILL 管理"
+      title={buildScreenTitle(branding, 'SKILL 管理')}
+      branding={branding}
       onHome={onHome}
       onHistory={onHistory}
       onLogout={onLogout}

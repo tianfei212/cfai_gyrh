@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
+import { buildScreenTitle, DEFAULT_BRANDING } from '../config/branding';
 import { fetchApi } from '../services/api';
 
 function StyleEditModal({ item, onClose, onSaved }) {
@@ -70,7 +71,7 @@ function StyleEditModal({ item, onClose, onSaved }) {
 
   return (
     <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <div className="modal-content" style={{ background: '#1e2025', width: '80%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '12px', padding: '24px', color: '#fff' }}>
+      <div className="modal-content" style={{ background: '#1e2025', overflowY: 'auto', borderRadius: '12px', padding: '24px', color: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h3 style={{ margin: 0 }}>{isNew ? '新建风格转换提示词' : `修改风格转换提示词 - ${item.name || item.id}`}</h3>
           <button className="mini-outline" onClick={onClose} style={{ cursor: 'pointer' }}>关闭</button>
@@ -134,7 +135,7 @@ function StyleEditModal({ item, onClose, onSaved }) {
   );
 }
 
-export function StyleManagerScreen({ onHome, onHistory, onLogout, onToggleModel, model }) {
+export function StyleManagerScreen({ onHome, onHistory, onLogout, onToggleModel, model, branding = DEFAULT_BRANDING }) {
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] = useState(null);
@@ -184,7 +185,8 @@ export function StyleManagerScreen({ onHome, onHistory, onLogout, onToggleModel,
 
   return (
     <SimpleFrame 
-      title="AI Smart Portrait · 风格转换管理"
+      title={buildScreenTitle(branding, '风格转换管理')}
+      branding={branding}
       onHome={onHome}
       onHistory={onHistory}
       onLogout={onLogout}
@@ -202,7 +204,7 @@ export function StyleManagerScreen({ onHome, onHistory, onLogout, onToggleModel,
           </div>
         </div>
         <div className="table-shell">
-          <div className="table-header table-grid" style={{ gridTemplateColumns: '80px 200px 100px 180px 1fr' }}>
+          <div className="table-header table-grid style-table-grid">
             <span>编号</span>
             <span>名称</span>
             <span>状态</span>
@@ -215,13 +217,13 @@ export function StyleManagerScreen({ onHome, onHistory, onLogout, onToggleModel,
             <div style={{ padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>暂无风格数据</div>
           ) : (
             prompts.map((row) => (
-              <div className="table-row table-grid" style={{ gridTemplateColumns: '80px 200px 100px 180px 1fr' }} key={row.id}>
-                <span>{row.id}</span>
-                <span title={row.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-                <span style={{ color: row.is_active ? '#4ade80' : 'rgba(255,255,255,0.4)' }}>
+              <div className="table-row table-grid style-table-grid" key={row.id}>
+                <span data-label="编号">{row.id}</span>
+                <span data-label="名称" title={row.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+                <span data-label="状态" style={{ color: row.is_active ? '#4ade80' : 'rgba(255,255,255,0.4)' }}>
                   {row.is_active ? '展示中' : '已隐藏'}
                 </span>
-                <span>{new Date(row.updated_at).toLocaleString()}</span>
+                <span data-label="更新时间">{new Date(row.updated_at).toLocaleString()}</span>
                 <div className="table-actions">
                   <button className="mini-outline" type="button" onClick={() => handleToggleActive(row)}>
                     {row.is_active ? '隐藏' : '展示'}

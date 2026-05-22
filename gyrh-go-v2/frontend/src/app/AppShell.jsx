@@ -1,4 +1,4 @@
-import React, { startTransition, useMemo, useState } from 'react';
+import React, { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { GlowBackdrop, ControlRail } from '../components/Layout';
 import { adminScreens } from '../constants';
 import { DashboardScreen } from '../screens/DashboardScreen';
@@ -11,15 +11,32 @@ import { CaptureScreen } from '../screens/CaptureScreen';
 import { RenderingScreen } from '../screens/RenderingScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { LogoutScreen } from '../screens/LogoutScreen';
+import { useBrandingConfig } from '../config/branding';
+import { fetchApi } from '../services/api';
+import { createBackgroundCache } from '../utils/backgroundCache';
+import { buildBackgroundPromptListUrl } from '../utils/backgroundPagination';
+import { prefetchSelfieSegmentationAssets } from '../utils/mediapipeAssets';
 import { getNextModel } from '../utils/modelProvider';
 import { normalizePreviewSelection } from '../utils/previewSelection';
 
 export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
+  const branding = useBrandingConfig();
   const [screen, setScreen] = useState('dashboard');
   const [model, setModel] = useState('G'); // W: Wan, G: Gemini, GPT: 302 GPT Image
   const [selectedBg, setSelectedBg] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
   const [previewMode, setPreviewMode] = useState('compare');
+  const backgroundCacheRef = useRef(null);
+
+  if (!backgroundCacheRef.current) {
+    backgroundCacheRef.current = createBackgroundCache({
+      fetchPage: async ({ page, limit }) => fetchApi(buildBackgroundPromptListUrl(page, limit)),
+    });
+  }
+
+  useEffect(() => {
+    prefetchSelfieSegmentationAssets();
+  }, []);
 
   const activeScreen = useMemo(
     () => adminScreens.find((item) => item.key === screen) ?? adminScreens[0],
@@ -70,15 +87,20 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
     onLogout: logout,
     onLogoutAction: goLogin,
     onToggleModel: toggleModel,
+    backgroundCache: backgroundCacheRef.current,
     model,
     selectedBg,
     capturedImage,
     previewMode,
+    branding,
     mode,
   };
 
   return (
-    <div className={`app-shell app-mode-${mode} screen-${screen}`}>
+    <div
+      className={`app-shell app-mode-${mode} screen-${screen}`}
+      style={branding.background ? { '--brand-background-image': `url(${branding.background})` } : undefined}
+    >
       <GlowBackdrop />
       {!activeScreen.hideInNav && (
         <ControlRail

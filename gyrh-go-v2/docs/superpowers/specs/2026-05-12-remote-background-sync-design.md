@@ -2,7 +2,7 @@
 
 ## 背景
 
-背景图管理页顶部有“同步”按钮，目前还没有绑定业务逻辑。`siteConfig.json` 中的 `gallery.apiUrl` 指向远端图库接口：
+背景图管理页顶部有“同步”按钮，目前还没有绑定业务逻辑。服务端 `configs/config.yaml` 中的 `gallery.external_url` 应配置为远端图库接口完整 URL（与旧版 `gallery.apiUrl` 语义相同），例如：
 
 ```text
 https://jjxo.chinafilmai.com/picGet/api/media?page=1&pageSize=20&sort=createTime,desc
@@ -22,7 +22,7 @@ https://jjxo.chinafilmai.com/picGet/api/media?page=1&pageSize=20&sort=createTime
 
 1. 管理员进入背景图管理页。
 2. 点击右上角“同步”按钮。
-3. 前端读取 `siteConfig.gallery.apiUrl`，调用后端同步接口。
+3. 前端调用后端同步接口（请求体可为空；未传 `api_url` 时由后端使用 `gallery.external_url`）。
 4. 后端只同步该 URL 当前页数据。
 5. 对已经同步过的远端 `id`，后端跳过，不覆盖本地记录。
 6. 对未同步过的数据，后端下载远端原图，上传到 OSS，创建背景图记录。
@@ -37,6 +37,12 @@ POST /api/v1/background-prompts/sync-remote
 ```
 
 请求体：
+
+```json
+{}
+```
+
+或显式覆盖默认地址：
 
 ```json
 {
@@ -66,11 +72,11 @@ POST /api/v1/background-prompts/sync-remote
 - 成功后刷新本地库列表。
 - 失败时提示错误原因。
 
-前端不下载图片、不转 base64，也不逐条调用现有导入接口。前端只把 `siteConfig.gallery.apiUrl` 发送给后端，由后端完成远端读取、图片下载、OSS 上传和数据库写入。
+前端不下载图片、不转 base64，也不逐条调用现有导入接口。前端发起同步请求即可（可选在请求体中传 `api_url` 覆盖配置）；由后端使用 `gallery.external_url` 或请求中的地址完成远端读取、图片下载、OSS 上传和数据库写入。
 
 ## 后端数据流
 
-1. 校验 `api_url` 非空，并限制为 `http` 或 `https` URL。
+1. 解析请求体中的 `api_url`；若为空则使用配置项 `gallery.external_url`。最终 URL 须非空，并限制为 `http` 或 `https`。
 2. 请求远端接口并解析响应。
 3. 遍历 `data.items`。
 4. 用远端 `id` 生成稳定本地名称：`remote:<id>`。
@@ -151,7 +157,7 @@ https://jjxo.chinafilmai.com/media_images/fcc15018dbd4b48f_20260506110411.jpg
 建议覆盖：
 
 - 点击“同步”后调用新接口，并在完成后刷新本地库。
-- 只同步 `siteConfig.gallery.apiUrl` 当前页，不自动翻页。
+- 只同步当前配置的图库接口 URL 对应页，不自动翻页。
 - 远端 `prompt` 同时写入 `wan_prompt_zh` 和 `gemini_prompt_zh`。
 - 英文提示词字段保持空值。
 - 不调用 `qwenAdvisor.SuggestFromAsset`。

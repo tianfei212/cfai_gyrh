@@ -1,11 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { WorkbenchLayout, HeaderIcon, HistorySidebar } from '../components/Layout';
+import { RefreshingImage } from '../components/RefreshingImage';
 import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
-import { fetchApi } from '../services/api';
-import { buildImageThumbnailUrl } from '../utils/imageThumbs';
+import { DEFAULT_BRANDING } from '../config/branding';
+import {
+  buildCaptureBackgroundThumbnailUrl,
+  buildImageThumbnailUrl,
+  getImagePreloadUrls,
+  preloadImages,
+} from '../utils/imageThumbs';
 import { getModelLabel, isGPTModel } from '../utils/modelProvider';
 
-export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, onPreview, model }) {
+export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, onPreview, backgroundCache, model, branding = DEFAULT_BRANDING }) {
   const fileInputRef = useRef(null);
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -15,13 +21,15 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
   const [total, setTotal] = useState(0);
   const limit = 6;
 
-  const fetchBackgrounds = async () => {
+  const fetchBackgrounds = async ({ force = false } = {}) => {
+    if (!backgroundCache) return;
     try {
       setLoading(true);
-      const offset = (page - 1) * limit;
-      const data = await fetchApi(`/api/v1/background-prompts?limit=${limit}&offset=${offset}`);
-      setBackgrounds(data.items || data.prompts || []);
+      const data = await backgroundCache.loadPage(page, { limit, force });
+      const nextItems = data.items || data.prompts || [];
+      setBackgrounds(nextItems);
       setTotal(data.total || 0);
+      preloadImages(getImagePreloadUrls(nextItems));
     } catch (err) {
       console.error('Failed to fetch backgrounds:', err);
     } finally {
@@ -51,6 +59,12 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
 
   const handleUseImage = (image) => (e) => {
     e.stopPropagation();
+    if (typeof image === 'object') {
+      preloadImages([buildCaptureBackgroundThumbnailUrl({
+        assetId: image.image_asset_id,
+        imageUrl: image.image_url,
+      })]);
+    }
     if (onCapture) {
       onCapture(image);
     }
@@ -100,7 +114,8 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
 
   return (
     <WorkbenchLayout
-      title="AI Smart Portrait · Apple Glass"
+      title={branding.appName}
+      branding={branding}
       headerActions={
         <>
           <HeaderIcon label={getModelLabel(model)} onClick={onToggleModel} />
@@ -184,7 +199,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
         <div className="section-topline">
           <h2>背景图库</h2>
           <div className="topbar-actions">
-            <button className="ghost-pill icon-pill" type="button" onClick={fetchBackgrounds}>
+            <button className="ghost-pill icon-pill" type="button" onClick={() => fetchBackgrounds({ force: true })}>
               <RefreshIcon />
             </button>
             <button className="ghost-pill icon-pill" type="button" onClick={onBackgrounds}>
@@ -203,9 +218,12 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
                 key={card.id}
                 className="gallery-card"
                 onClick={handleUseImage(card)}
-                style={{ cursor: 'pointer', backgroundImage: card.image_url ? `url(${buildImageThumbnailUrl({ imageUrl: card.image_url })})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
+                style={{ cursor: 'pointer' }}
                 title={isGPTModel(model) ? '302 GPT Image 通用融合 Skill' : model === 'W' ? card.wan_prompt : card.gemini_prompt}
               >
+                {card.image_url || card.image_asset_id ? (
+                  <RefreshingImage src={buildImageThumbnailUrl({ assetId: card.image_asset_id, imageUrl: card.image_url })} alt={card.name || `背景 ${card.id}`} />
+                ) : null}
                 <span style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 8px', borderRadius: '4px' }}>{card.name || `背景 ${card.id}`}</span>
               </article>
             ))

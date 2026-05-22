@@ -61,8 +61,71 @@ func TestParseRemoteDimensions(t *testing.T) {
 	}
 }
 
+func TestBackgroundPromptListReturnsOSSImageURLAndStableProxyURL(t *testing.T) {
+	database, err := db.NewDB(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	repo := db.NewBackgroundPromptRepo(database)
+	if _, err := repo.Create(
+		"bg",
+		"gemini",
+		"",
+		"",
+		"",
+		"wan",
+		"",
+		"",
+		"",
+		"gpt",
+		"",
+		"",
+		"",
+		"asset:bg-existing",
+		"https://signed.example.com/old.png",
+		1280,
+		720,
+	); err != nil {
+		t.Fatalf("create background prompt: %v", err)
+	}
+
+	storageSvc := &fakeStorageService{}
+	handler := NewBackgroundPromptHandler(repo, storageSvc, nil, "")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/background-prompts?limit=6&offset=0", nil)
+	w := httptest.NewRecorder()
+
+	handler.List(w, req)
+
+	if storageSvc.getImageURLCalls != 1 {
+		t.Fatalf("GetImageURL calls = %d, want 1 to preserve OSS image_url semantics", storageSvc.getImageURLCalls)
+	}
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			Items []map[string]any `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data.Items) != 1 {
+		t.Fatalf("items len = %d", len(resp.Data.Items))
+	}
+	if got := resp.Data.Items[0]["image_url"]; got != "https://oss.example.com/asset:bg-existing" {
+		t.Fatalf("image_url = %v", got)
+	}
+	if got := resp.Data.Items[0]["image_proxy_url"]; got != "/api/v1/images/view?asset_id=asset%3Abg-existing" {
+		t.Fatalf("image_proxy_url = %v", got)
+	}
+}
+
 type fakeStorageService struct {
-	saved [][]byte
+	saved            [][]byte
+	getImageURLCalls int
+	saveStarted      chan struct{}
+	saveRelease      chan struct{}
 }
 
 func (s *fakeStorageService) Save(ctx context.Context, data []byte, filename string) (string, error) {
@@ -70,6 +133,16 @@ func (s *fakeStorageService) Save(ctx context.Context, data []byte, filename str
 }
 
 func (s *fakeStorageService) SaveWithKind(ctx context.Context, data []byte, filename string, kind storage.SaveKind) (string, error) {
+	if s.saveStarted != nil {
+		select {
+		case <-s.saveStarted:
+		default:
+			close(s.saveStarted)
+		}
+	}
+	if s.saveRelease != nil {
+		<-s.saveRelease
+	}
 	s.saved = append(s.saved, data)
 	return "asset:remote-test", nil
 }
@@ -79,6 +152,7 @@ func (s *fakeStorageService) Read(ctx context.Context, assetID string) ([]byte, 
 }
 
 func (s *fakeStorageService) GetImageURL(ctx context.Context, assetID string) (string, error) {
+	s.getImageURLCalls++
 	return "https://oss.example.com/" + assetID, nil
 }
 
@@ -172,7 +246,7 @@ func TestSyncRemoteImportsCurrentPageWithoutSuggest(t *testing.T) {
 
 	repo := db.NewBackgroundPromptRepo(&db.DB{DB: rawDB})
 	store := &fakeStorageService{}
-	h := NewBackgroundPromptHandler(repo, store, nil)
+	h := NewBackgroundPromptHandler(repo, store, nil, "")
 
 	body := strings.NewReader(`{"api_url":"` + remote.URL + `/picGet/api/media?page=1&pageSize=20"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/background-prompts/sync-remote", body)
@@ -298,7 +372,7 @@ func TestSyncRemoteSkipsExistingRemoteRecord(t *testing.T) {
 	defer remote.Close()
 
 	store := &fakeStorageService{}
-	h := NewBackgroundPromptHandler(repo, store, nil)
+	h := NewBackgroundPromptHandler(repo, store, nil, "")
 
 	body := strings.NewReader(`{"api_url":"` + remote.URL + `/picGet/api/media?page=1&pageSize=20"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/background-prompts/sync-remote", body)

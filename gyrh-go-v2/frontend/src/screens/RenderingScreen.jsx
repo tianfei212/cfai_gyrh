@@ -1,10 +1,12 @@
 import React from 'react';
 import { SimpleFrame } from '../components/Layout';
+import { buildScreenTitle, DEFAULT_BRANDING } from '../config/branding';
 
-export function RenderingScreen({ onHome, onHistory, onLogout, onToggleModel, model }) {
+export function RenderingScreen({ onHome, onHistory, onLogout, onToggleModel, model, branding = DEFAULT_BRANDING }) {
   return (
     <SimpleFrame 
-      title="AI Smart Portrait · 生成等待中"
+      title={buildScreenTitle(branding, '生成等待中')}
+      branding={branding}
       onHome={onHome}
       onHistory={onHistory}
       onLogout={onLogout}

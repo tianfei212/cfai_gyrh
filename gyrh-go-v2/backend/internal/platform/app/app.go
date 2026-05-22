@@ -21,6 +21,7 @@ import (
 	"gyrh-go-v2/backend/internal/core/llm"
 	"gyrh-go-v2/backend/internal/core/llm/qwen"
 	"gyrh-go-v2/backend/internal/db"
+	"gyrh-go-v2/backend/internal/frontend"
 	"gyrh-go-v2/backend/internal/logger"
 	"gyrh-go-v2/backend/internal/oss"
 	"gyrh-go-v2/backend/internal/storage"
@@ -103,7 +104,7 @@ func Run(ctx context.Context) error {
 	referenceHandler := handler.NewReferenceHandler(referenceRepo, storageService)
 	skillHandler := handler.NewSkillHandler(skillRepo)
 	llmPromptTemplateHandler := handler.NewLLMPromptTemplateHandler(llmPromptTemplateRepo)
-	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor)
+	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor, cfg.Gallery.ExternalURL)
 	stylePromptHandler := handler.NewStylePromptHandler(stylePromptRepo)
 
 	router := mux.NewRouter()
@@ -116,6 +117,7 @@ func Run(ctx context.Context) error {
 			return os.Getenv(envKey)
 		},
 	})
+	router.PathPrefix("/").Handler(frontend.Handler())
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),

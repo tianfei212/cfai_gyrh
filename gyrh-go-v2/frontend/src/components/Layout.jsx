@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { HomeIcon, StackIcon, ExitIcon, SearchIcon } from './Icons';
+import { RefreshingImage } from './RefreshingImage';
 import { screens } from '../constants';
 import { fetchApi } from '../services/api';
+import { DEFAULT_BRANDING } from '../config/branding';
 import {
   buildHistoryPreviewPayload,
   buildHistoryTitle,
@@ -17,11 +19,19 @@ export function HeaderIcon({ icon, label, onClick }) {
   );
 }
 
-export function TopBar({ title, children }) {
+export function BrandLogo({ branding = DEFAULT_BRANDING }) {
+  return (
+    <div className="brand-logo">
+      {branding.logo ? <img src={branding.logo} alt={`${branding.appName} logo`} /> : null}
+    </div>
+  );
+}
+
+export function TopBar({ title, children, branding = DEFAULT_BRANDING }) {
   return (
     <header className="topbar">
       <div className="brand-cluster">
-        <div className="brand-logo" />
+        <BrandLogo branding={branding} />
         <span>{title}</span>
       </div>
       <div className="topbar-actions">{children}</div>
@@ -29,10 +39,10 @@ export function TopBar({ title, children }) {
   );
 }
 
-export function WorkbenchLayout({ title, headerActions, children, rightSidebar }) {
+export function WorkbenchLayout({ title, headerActions, children, rightSidebar, branding }) {
   return (
     <div className="workbench-screen">
-      <TopBar title={title}>{headerActions}</TopBar>
+      <TopBar title={title} branding={branding}>{headerActions}</TopBar>
       <div className="workbench-grid">
         <div className="workbench-main">{children}</div>
         <div className="workbench-side">{rightSidebar}</div>
@@ -41,10 +51,10 @@ export function WorkbenchLayout({ title, headerActions, children, rightSidebar }
   );
 }
 
-export function SimpleFrame({ title, children, onHome, onHistory, onLogout, onToggleModel, model }) {
+export function SimpleFrame({ title, children, onHome, onHistory, onLogout, onToggleModel, model, branding }) {
   return (
     <div className="simple-screen">
-      <TopBar title={title}>
+      <TopBar title={title} branding={branding}>
         <HeaderIcon label={getModelLabel(model)} onClick={onToggleModel} />
         <HeaderIcon icon={<HomeIcon />} onClick={onHome} />
         <HeaderIcon icon={<StackIcon />} onClick={onHistory} />
@@ -180,7 +190,7 @@ export function HistorySidebar({ onPreview }) {
               onClick={() => onPreview?.(buildHistoryPreviewPayload(record))}
             >
               {record.url ? (
-                <img src={record.url} alt={`历史记录 ${record.id}`} />
+                <RefreshingImage src={record.url} alt={`历史记录 ${record.id}`} />
               ) : (
                 <span>图片丢失</span>
               )}

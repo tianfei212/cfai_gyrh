@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
+import { RefreshingImage } from '../components/RefreshingImage';
+import { buildScreenTitle, DEFAULT_BRANDING } from '../config/branding';
 import { fetchApi } from '../services/api';
 import {
   BACKGROUND_MANAGER_PAGE_SIZE,
@@ -7,7 +9,17 @@ import {
   getPageAfterRefresh,
   getTotalPages,
 } from '../utils/backgroundPagination';
-import siteConfig from '../../../../siteConfig.json';
+import { appendImageCacheBucket } from '../utils/imageThumbs';
+
+function buildBackgroundThumbnailUrl(item, width, height) {
+  let url = '';
+  if (item?.image_asset_id) {
+    url = `/api/v1/images/thumbnail?asset_id=${encodeURIComponent(item.image_asset_id)}&w=${width}&h=${height}`;
+  } else if (item?.image_url) {
+    url = `/api/v1/images/thumbnail?url=${encodeURIComponent(item.image_url)}&w=${width}&h=${height}`;
+  }
+  return appendImageCacheBucket(url);
+}
 
 function BackgroundEditModal({ item, onClose, onSaved }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -75,7 +87,7 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
 
   return (
     <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <div className="modal-content" style={{ background: '#1e2025', width: '80%', maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '12px', padding: '24px', color: '#fff' }}>
+      <div className="modal-content" style={{ background: '#1e2025', overflowY: 'auto', borderRadius: '12px', padding: '24px', color: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h3 style={{ margin: 0 }}>修改提示词 - {item.name || item.id}</h3>
           <button className="mini-outline" onClick={onClose} style={{ cursor: 'pointer' }}>关闭</button>
@@ -83,7 +95,7 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
 
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
           {item.image_url ? (
-            <img src={`/api/v1/images/thumbnail?url=${encodeURIComponent(item.image_url)}&w=400&h=400`} alt="background" style={{ maxHeight: '300px', maxWidth: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} />
+            <RefreshingImage src={buildBackgroundThumbnailUrl(item, 400, 400)} alt="background" style={{ maxHeight: '300px', maxWidth: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} />
           ) : (
             <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.5)' }}>无图片</div>
           )}
@@ -100,7 +112,7 @@ function BackgroundEditModal({ item, onClose, onSaved }) {
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+        <div className="responsive-form-grid">
           <div>
             <h4 style={{ margin: '0 0 10px 0' }}>Wan 中文提示词</h4>
             <textarea 
@@ -191,14 +203,14 @@ function OriginalImagePreviewModal({ item, onClose }) {
           <button className="mini-outline" type="button" onClick={onClose}>关闭</button>
         </div>
         <div className="image-preview-stage">
-          <img src={item.image_url} alt={item.name || '背景原图'} />
+          <RefreshingImage src={item.image_url} alt={item.name || '背景原图'} />
         </div>
       </div>
     </div>
   );
 }
 
-export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleModel, model }) {
+export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleModel, backgroundCache, model, branding = DEFAULT_BRANDING }) {
   const [backgrounds, setBackgrounds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -228,6 +240,7 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
   }, [page]);
 
   const refreshBackgrounds = async ({ resetToFirstPage = false } = {}) => {
+    backgroundCache?.invalidateAll();
     const nextPage = getPageAfterRefresh(page, { resetToFirstPage });
     if (nextPage !== page) {
       setPage(nextPage);
@@ -262,17 +275,11 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
   };
 
   const handleSyncRemote = async () => {
-    const apiUrl = siteConfig?.gallery?.apiUrl;
-    if (!apiUrl) {
-      alert('未配置远端图库地址');
-      return;
-    }
-
     setSyncing(true);
     try {
       const result = await fetchApi('/api/v1/background-prompts/sync-remote', {
         method: 'POST',
-        body: JSON.stringify({ api_url: apiUrl })
+        body: JSON.stringify({})
       });
       await refreshBackgrounds({ resetToFirstPage: true });
       const failures = result.failures?.length ? `，失败 ${result.failed} 条` : '';
@@ -320,7 +327,8 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
 
   return (
     <SimpleFrame 
-      title="AI Smart Portrait · 背景管理"
+      title={buildScreenTitle(branding, '背景管理')}
+      branding={branding}
       onHome={onHome}
       onHistory={onHistory}
       onLogout={onLogout}
@@ -365,14 +373,17 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
           ) : (
             backgrounds.map((row) => (
               <div className="table-row table-grid" key={row.id}>
-                <span title={row.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name || '-'}</span>
+                <span data-label="图片名称" title={row.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name || '-'}</span>
                 <div 
                   className="thumb-swatch" 
-                  style={{ backgroundImage: row.image_url ? `url(/api/v1/images/thumbnail?url=${encodeURIComponent(row.image_url)}&w=150&h=150)` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }} 
-                />
-                <span title={row.wan_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.wan_prompt_zh || '-'}</span>
-                <span title={row.gemini_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gemini_prompt_zh || '-'}</span>
-                <span title={row.gpt_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gpt_prompt_zh || '-'}</span>
+                >
+                  {row.image_url || row.image_asset_id ? (
+                    <RefreshingImage src={buildBackgroundThumbnailUrl(row, 150, 150)} alt={row.name || '背景缩略图'} />
+                  ) : null}
+                </div>
+                <span data-label="Wan 提示词" title={row.wan_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.wan_prompt_zh || '-'}</span>
+                <span data-label="Gemini 提示词" title={row.gemini_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gemini_prompt_zh || '-'}</span>
+                <span data-label="GPT 提示词" title={row.gpt_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gpt_prompt_zh || '-'}</span>
                 <div className="table-actions">
                   {row.image_url && <button className="mini-outline" type="button" onClick={() => setPreviewingItem(row)}>查看原图</button>}
                   <button className="mini-outline" type="button" onClick={() => setEditingItem(row)}>编辑</button>

@@ -70,12 +70,27 @@ is_running() {
   [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" >/dev/null 2>&1
 }
 
+ensure_binary_executable() {
+  if [ ! -f "$BIN" ]; then
+    err "未找到服务二进制: $BIN"
+    exit 1
+  fi
+  if [ ! -x "$BIN" ]; then
+    warn "服务二进制缺少执行权限，自动执行 chmod +x $BIN"
+    chmod +x "$BIN" || {
+      err "无法给服务二进制增加执行权限: $BIN"
+      exit 1
+    }
+  fi
+}
+
 start() {
   mkdir -p "$APP_DIR/runtime" "$APP_DIR/logs"
   if is_running; then
     info "GYRH 已运行，PID=$(cat "$PID_FILE")"
     return 0
   fi
+  ensure_binary_executable
   load_env
   cd "$APP_DIR"
   nohup "$BIN" >> "$LOG_FILE" 2>&1 &
@@ -218,11 +233,6 @@ fi
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y nginx openssl
 
-if [ ! -d "$APP_DIR/frontend/dist" ]; then
-  echo "[ERROR] 未找到前端静态目录: $APP_DIR/frontend/dist" >&2
-  exit 1
-fi
-
 if [ ! -f "$SSL_CERT" ] || [ ! -f "$SSL_KEY" ]; then
   mkdir -p "$(dirname "$SSL_CERT")" "$(dirname "$SSL_KEY")"
   openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
@@ -246,12 +256,9 @@ server {
     ssl_certificate $SSL_CERT;
     ssl_certificate_key $SSL_KEY;
 
-    root $APP_DIR/frontend/dist;
-    index index.html;
-
     client_max_body_size 80m;
 
-    location /api/ {
+    location / {
         proxy_pass http://127.0.0.1:$BACKEND_PORT;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
@@ -261,10 +268,6 @@ server {
         proxy_read_timeout 600s;
         proxy_send_timeout 600s;
     }
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
 }
 EOF
 
@@ -273,7 +276,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl enable nginx
 systemctl reload nginx || systemctl restart nginx
-echo "[INFO] Nginx 已配置完成，对外服务端口: 443"
+echo "[INFO] Nginx 已配置完成，对外服务端口: 443，所有请求反向代理到 127.0.0.1:$BACKEND_PORT"
 NGINXEOF
   chmod +x "$target"
 }
@@ -316,9 +319,77 @@ INSTALLEOF
   chmod +x "$target"
 }
 
+write_verify_script() {
+  local target="$1"
+  cat > "$target" <<'VERIFYEOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:9913}"
+PUBLIC_URL="${PUBLIC_URL:-}"
+
+check_url() {
+  local base="$1"
+  local path="$2"
+  local url="${base%/}${path}"
+  local code
+  code="$(curl -k -sS -o /dev/null -w '%{http_code}' "$url")"
+  if [ "$code" != "200" ]; then
+    echo "[ERROR] $url => HTTP $code" >&2
+    return 1
+  fi
+  echo "[OK] $url"
+}
+
+check_bundle() {
+  local base="$1"
+  local index
+  index="$(curl -k -sS "${base%/}/")"
+  local asset
+  asset="$(printf '%s' "$index" | sed -n 's/.*src="\(\/assets\/index-[^"]*\.js\)".*/\1/p' | head -n 1)"
+  if [ -z "$asset" ]; then
+    echo "[ERROR] ${base%/}/ 未返回新前端 index.html 或缺少 JS 入口" >&2
+    return 1
+  fi
+  check_url "$base" "$asset"
+}
+
+paths=(
+  "/admin_viewer"
+  "/models/selfie_segmentation/selfie_segmentation.binarypb"
+  "/models/selfie_segmentation/selfie_segmentation.js"
+  "/models/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.js"
+  "/models/selfie_segmentation/selfie_segmentation_solution_wasm_bin.js"
+  "/models/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.wasm"
+  "/models/selfie_segmentation/selfie_segmentation_solution_wasm_bin.wasm"
+  "/models/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.data"
+  "/models/selfie_segmentation/selfie_segmentation.tflite"
+  "/models/selfie_segmentation/selfie_segmentation_landscape.tflite"
+)
+
+echo "[INFO] 检查后端单二进制: $BACKEND_URL"
+check_bundle "$BACKEND_URL"
+for path in "${paths[@]}"; do
+  check_url "$BACKEND_URL" "$path"
+done
+
+if [ -n "$PUBLIC_URL" ]; then
+  echo "[INFO] 检查公网/Nginx: $PUBLIC_URL"
+  check_bundle "$PUBLIC_URL"
+  for path in "${paths[@]}"; do
+    check_url "$PUBLIC_URL" "$path"
+  done
+fi
+
+echo "[INFO] 发布自检通过"
+VERIFYEOF
+  chmod +x "$target"
+}
+
 require_cmd npm
 require_cmd go
 require_cmd tar
+require_cmd curl
 
 build_backend_linux_amd64() {
   local output="$1"
@@ -360,6 +431,9 @@ mkdir -p "$STAGE_DIR/bin" "$STAGE_DIR/backend/data" "$STAGE_DIR/frontend" "$STAG
 
 info "构建前端静态文件"
 (cd "$ROOT_DIR/frontend" && npm run build)
+rm -rf "$ROOT_DIR/backend/internal/frontend/dist"
+mkdir -p "$ROOT_DIR/backend/internal/frontend"
+cp -a "$ROOT_DIR/frontend/dist" "$ROOT_DIR/backend/internal/frontend/"
 cp -a "$ROOT_DIR/frontend/dist" "$STAGE_DIR/frontend/"
 
 info "构建 Ubuntu amd64 后端二进制"
@@ -390,17 +464,18 @@ write_manage_script "$STAGE_DIR/manage.sh"
 write_service_script "$STAGE_DIR/scripts/install_service.sh"
 write_nginx_script "$STAGE_DIR/scripts/install_nginx.sh"
 write_install_script "$STAGE_DIR/install_release.sh"
+write_verify_script "$STAGE_DIR/scripts/verify_release.sh"
 
-cat > "$STAGE_DIR/README_DEPLOY.md" <<EOF
+cat > "$STAGE_DIR/README_DEPLOY.md" <<'EOF'
 # GYRH Ubuntu 部署包
 
-后端以 Go 单二进制文件 `bin/gyrh-server` 运行；前端是构建期生成的静态文件，由 Nginx 通过 443 端口托管。
+后端以 Go 单二进制文件 `bin/gyrh-server` 运行；前端 `dist` 已在构建期内嵌到该二进制中。
 
 ## 安装
 
 \`\`\`bash
-tar -xzf ${PACKAGE_NAME}.tar.gz
-cd ${PACKAGE_NAME}
+tar -xzf <release>.tar.gz
+cd <release>
 sudo ./install_release.sh
 sudo nano /opt/gyrh/.env.local
 sudo /opt/gyrh/scripts/install_service.sh
@@ -412,7 +487,7 @@ sudo /opt/gyrh/scripts/install_nginx.sh
 - 演示端：\`https://<机器IP>/\`
 - 管理端：\`https://<机器IP>/admin_viewer\`
 
-Nginx 对外监听 443，并将 \`/api/\` 反向代理到后端 \`127.0.0.1:9913\`。
+Nginx 对外监听 443，并将 `/` 全部反向代理到后端 `127.0.0.1:9913`。后端会同时处理 API 与前端静态页面。
 EOF
 
 info "生成压缩包"

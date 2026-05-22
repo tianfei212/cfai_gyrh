@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,9 +21,11 @@ type blockingLLMService struct {
 	started chan struct{}
 	release chan struct{}
 	waited  chan string
+	done    chan struct{}
 }
 
 func (s *blockingLLMService) Compose(ctx context.Context, params llm.ComposeParams) (*llm.ComposeResult, error) {
+	defer closeIfPresent(s.done)
 	close(s.started)
 	<-s.release
 	return &llm.ComposeResult{
@@ -37,6 +40,7 @@ func (s *blockingLLMService) StartCompose(ctx context.Context, params llm.Compos
 }
 
 func (s *blockingLLMService) WaitComposeResult(ctx context.Context, provider, externalTaskID string) (*llm.ComposeResult, error) {
+	defer closeIfPresent(s.done)
 	if s.waited != nil {
 		s.waited <- externalTaskID
 	}
@@ -45,6 +49,22 @@ func (s *blockingLLMService) WaitComposeResult(ctx context.Context, provider, ex
 		Base64: base64.StdEncoding.EncodeToString(tinyPNGBytes()),
 		Status: "succeeded",
 	}, nil
+}
+
+func closeIfPresent(ch chan struct{}) {
+	if ch != nil {
+		close(ch)
+	}
+}
+
+func releaseAndWaitForBlockingRewrite(t *testing.T, svc *blockingLLMService) {
+	t.Helper()
+	close(svc.release)
+	select {
+	case <-svc.done:
+	case <-time.After(time.Second):
+		t.Fatal("expected async rewrite task to finish")
+	}
 }
 
 func TestRewrite302GPTImageReturnsTaskImmediately(t *testing.T) {
@@ -58,8 +78,8 @@ func TestRewrite302GPTImageReturnsTaskImmediately(t *testing.T) {
 	llmSvc := &blockingLLMService{
 		started: make(chan struct{}),
 		release: make(chan struct{}),
+		done:    make(chan struct{}),
 	}
-	defer close(llmSvc.release)
 
 	handler := NewImageHandler(db.NewImageRepo(database), nil, nil, storageSvc, llmSvc)
 	body := `{"provider":"302-gpt-image","foreground":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `","background":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `"}`
@@ -91,6 +111,133 @@ func TestRewrite302GPTImageReturnsTaskImmediately(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("expected background goroutine to start compose")
 	}
+	releaseAndWaitForBlockingRewrite(t, llmSvc)
+}
+
+func TestRewriteGoogleReturnsTaskImmediately(t *testing.T) {
+	database, err := db.NewDB(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	storageSvc := &fakeStorageService{}
+	llmSvc := &blockingLLMService{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+
+	handler := NewImageHandler(db.NewImageRepo(database), nil, nil, storageSvc, llmSvc)
+	body := `{"provider":"google","foreground":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `","background":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/images/rewrite", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	if err := handler.Rewrite(context.Background(), w, req); err != nil {
+		t.Fatalf("Rewrite returned error: %v", err)
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Code int             `json:"code"`
+		Data RewriteResponse `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Data.TaskID == "" {
+		t.Fatalf("expected task id for google rewrite, got %+v", resp.Data)
+	}
+	select {
+	case <-llmSvc.started:
+	case <-time.After(time.Second):
+		t.Fatalf("expected async google compose to start")
+	}
+	releaseAndWaitForBlockingRewrite(t, llmSvc)
+}
+
+func TestRewriteReturnsTaskBeforeUploadingForeground(t *testing.T) {
+	database, err := db.NewDB(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	storageSvc := &fakeStorageService{
+		saveStarted: make(chan struct{}),
+		saveRelease: make(chan struct{}),
+	}
+	llmSvc := &capturingLLMService{}
+	handler := NewImageHandler(db.NewImageRepo(database), nil, nil, storageSvc, llmSvc)
+	body := `{"provider":"google","foreground":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `","background":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/images/rewrite", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	if err := handler.Rewrite(context.Background(), w, req); err != nil {
+		t.Fatalf("Rewrite returned error: %v", err)
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+	taskID := decodeRewriteTaskID(t, w.Body.Bytes())
+	select {
+	case <-storageSvc.saveStarted:
+	case <-time.After(time.Second):
+		t.Fatalf("expected background task to start uploading foreground")
+	}
+	if len(storageSvc.saved) != 0 {
+		t.Fatalf("rewrite response waited for storage save, saved len=%d", len(storageSvc.saved))
+	}
+	close(storageSvc.saveRelease)
+	select {
+	case <-mustRewriteDoneChan(t, handler, taskID):
+	case <-time.After(time.Second):
+		t.Fatal("expected async rewrite task to finish")
+	}
+}
+
+func TestRewriteWanReturnsTaskImmediately(t *testing.T) {
+	database, err := db.NewDB(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	storageSvc := &fakeStorageService{}
+	llmSvc := &blockingLLMService{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+
+	handler := NewImageHandler(db.NewImageRepo(database), nil, nil, storageSvc, llmSvc)
+	body := `{"provider":"wan","foreground":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `","background":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/images/rewrite", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	if err := handler.Rewrite(context.Background(), w, req); err != nil {
+		t.Fatalf("Rewrite returned error: %v", err)
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Code int             `json:"code"`
+		Data RewriteResponse `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Data.TaskID == "" {
+		t.Fatalf("expected task id for wan rewrite, got %+v", resp.Data)
+	}
+	select {
+	case <-llmSvc.started:
+	case <-time.After(time.Second):
+		t.Fatalf("expected async wan compose to start")
+	}
+	releaseAndWaitForBlockingRewrite(t, llmSvc)
 }
 
 func TestRewriteTaskStatusReturnsCompletedResult(t *testing.T) {
@@ -175,6 +322,79 @@ func TestRewriteTaskStatusFallsBackToPersistedResult(t *testing.T) {
 	}
 }
 
+func TestRewriteUsesBackgroundPromptAssetWithoutBackgroundBase64(t *testing.T) {
+	database, err := db.NewDB(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	backgroundRepo := db.NewBackgroundPromptRepo(database)
+	backgroundID, err := backgroundRepo.Create(
+		"cached background",
+		"gemini prompt",
+		"",
+		"",
+		"",
+		"wan prompt",
+		"",
+		"",
+		"",
+		"gpt prompt",
+		"",
+		"",
+		"",
+		"asset:bg-existing",
+		"https://oss.example.com/bg.png",
+		1280,
+		720,
+	)
+	if err != nil {
+		t.Fatalf("create background prompt: %v", err)
+	}
+
+	llmSvc := &capturingLLMService{}
+	handler := NewImageHandler(db.NewImageRepo(database), backgroundRepo, nil, &fakeStorageService{}, llmSvc)
+	body := `{"provider":"google","foreground":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `","background_prompt_id":` + jsonNumber(backgroundID) + `}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/images/rewrite", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	if err := handler.Rewrite(context.Background(), w, req); err != nil {
+		t.Fatalf("Rewrite returned error: %v", err)
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+
+	taskID := decodeRewriteTaskID(t, w.Body.Bytes())
+	if _, ok := handler.rewriteTasks.doneChan(taskID); !ok {
+		t.Fatalf("expected in-memory rewrite task %q", taskID)
+	}
+	select {
+	case <-mustRewriteDoneChan(t, handler, taskID):
+	case <-time.After(time.Second):
+		t.Fatal("expected async rewrite task to finish")
+	}
+
+	if !containsImageInput(llmSvc.params.Images, llm.ImageTypeBackground, "asset:bg-existing") {
+		t.Fatalf("expected existing background asset in compose inputs, got %+v", llmSvc.params.Images)
+	}
+}
+
+func TestThumbnailSetsThreeMinuteCacheHeader(t *testing.T) {
+	handler := NewImageHandler(nil, nil, nil, &fakeStorageService{}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/images/thumbnail?asset_id=asset:bg&w=400&h=225", nil)
+	w := httptest.NewRecorder()
+
+	if err := handler.Thumbnail(context.Background(), w, req); err != nil {
+		t.Fatalf("Thumbnail returned error: %v", err)
+	}
+
+	if got := w.Header().Get("Cache-Control"); got != "public, max-age=180" {
+		t.Fatalf("Cache-Control = %q", got)
+	}
+}
+
 func TestRewriteTaskStatusRestartsRunningPersistedTask(t *testing.T) {
 	database, err := db.NewDB(t.TempDir() + "/test.db")
 	if err != nil {
@@ -197,8 +417,8 @@ func TestRewriteTaskStatusRestartsRunningPersistedTask(t *testing.T) {
 		started: make(chan struct{}),
 		release: make(chan struct{}),
 		waited:  make(chan string, 1),
+		done:    make(chan struct{}),
 	}
-	defer close(llmSvc.release)
 	handler := NewImageHandler(db.NewImageRepo(database), nil, nil, &fakeStorageService{}, llmSvc, repo)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/images/rewrite/tasks/rewrite_running", nil)
 	req = mux.SetURLVars(req, map[string]string{"id": "rewrite_running"})
@@ -216,6 +436,67 @@ func TestRewriteTaskStatusRestartsRunningPersistedTask(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected persisted running task to restart background wait")
 	}
+	releaseAndWaitForBlockingRewrite(t, llmSvc)
+}
+
+func decodeRewriteTaskID(t *testing.T, body []byte) string {
+	t.Helper()
+	var resp struct {
+		Data RewriteResponse `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode rewrite response: %v", err)
+	}
+	if resp.Data.TaskID == "" {
+		t.Fatalf("expected task id in response: %s", string(body))
+	}
+	return resp.Data.TaskID
+}
+
+func mustRewriteDoneChan(t *testing.T, handler *ImageHandler, taskID string) <-chan struct{} {
+	t.Helper()
+	done, ok := handler.rewriteTasks.doneChan(taskID)
+	if !ok {
+		t.Fatalf("missing task %q", taskID)
+	}
+	return done
+}
+
+type capturingLLMService struct {
+	params llm.ComposeParams
+}
+
+func (s *capturingLLMService) Compose(ctx context.Context, params llm.ComposeParams) (*llm.ComposeResult, error) {
+	s.params = params
+	return &llm.ComposeResult{
+		Base64: base64.StdEncoding.EncodeToString(tinyPNGBytes()),
+		Status: "succeeded",
+	}, nil
+}
+
+func (s *capturingLLMService) StartCompose(ctx context.Context, params llm.ComposeParams) (*llm.StartedComposeTask, error) {
+	s.params = params
+	return &llm.StartedComposeTask{ExternalTaskID: "external-task-1"}, nil
+}
+
+func (s *capturingLLMService) WaitComposeResult(ctx context.Context, provider, externalTaskID string) (*llm.ComposeResult, error) {
+	return &llm.ComposeResult{
+		Base64: base64.StdEncoding.EncodeToString(tinyPNGBytes()),
+		Status: "succeeded",
+	}, nil
+}
+
+func containsImageInput(inputs []llm.ImageInput, imageType llm.ImageType, assetID string) bool {
+	for _, input := range inputs {
+		if input.Type == imageType && input.AssetID == assetID {
+			return true
+		}
+	}
+	return false
+}
+
+func jsonNumber(value int64) string {
+	return strconv.FormatInt(value, 10)
 }
 
 func tinyPNGBytes() []byte {

@@ -20,7 +20,7 @@ gyrh-go-v2/backend/bin/302helpper/
 
 ## 非目标
 
-本次不引入 `302Helpper` 源码，不把它作为 Go module 依赖，不把其内部 adapter、provider 或 task 代码复制进 Go v2。根目录旧版 `siteConfig.json` 不在本次范围内。现有 `wan` 与 `google/gemini` provider 行为保持不变。
+本次不引入 `302Helpper` 源码，不把它作为 Go module 依赖，不把其内部 adapter、provider 或 task 代码复制进 Go v2。根目录旧版前端独立配置不在本次范围内。现有 `wan` 与 `google/gemini` provider 行为保持不变。
 
 ## 配置设计
 

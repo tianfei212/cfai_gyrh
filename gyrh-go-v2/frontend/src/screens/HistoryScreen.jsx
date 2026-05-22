@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SimpleFrame } from '../components/Layout';
+import { RefreshingImage } from '../components/RefreshingImage';
 import { ChevronLeftIcon, ChevronRightIcon } from '../components/Icons';
+import { buildScreenTitle, DEFAULT_BRANDING } from '../config/branding';
 import { fetchApi } from '../services/api';
 import {
   buildHistoryPreviewPayload,
@@ -9,7 +11,7 @@ import {
   mapGeneratedImagesToHistoryRecords,
 } from '../utils/historyRecords';
 
-export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, model, onPreview }) {
+export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, model, onPreview, branding = DEFAULT_BRANDING }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -90,7 +92,8 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
 
   return (
     <SimpleFrame 
-      title="AI Smart Portrait · 历史记录管理"
+      title={buildScreenTitle(branding, '历史记录管理')}
+      branding={branding}
       onHome={onHome}
       onHistory={onHistory}
       onLogout={onLogout}
@@ -130,7 +133,7 @@ export function HistoryScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                 }}
               >
                 {card.url ? (
-                  <img 
+                  <RefreshingImage 
                     src={card.url} 
                     alt={`生成的图片 ${card.id}`}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: 'inherit' }} 

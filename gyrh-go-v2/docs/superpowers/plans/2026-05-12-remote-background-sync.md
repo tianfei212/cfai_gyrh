@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a background manager sync action that imports the current remote gallery page from `siteConfig.gallery.apiUrl` into local OSS-backed `background_prompts` records without triggering Qwen prompt reverse generation.
+**Goal:** Build a background manager sync action that imports the current remote gallery page (default URL from `configs/config.yaml` → `gallery.external_url`, overridable via request `api_url`) into local OSS-backed `background_prompts` records without triggering Qwen prompt reverse generation.
 
-**Architecture:** Add a dedicated backend sync endpoint separate from the existing manual import path. The frontend sends the configured remote API URL to the backend; the backend fetches remote JSON, downloads each unsynced image, uploads it through `StorageService`, creates `background_prompts` rows with remote Chinese prompt text, and reports imported/skipped/failed counts.
+**Architecture:** Add a dedicated backend sync endpoint separate from the existing manual import path. The frontend calls the sync endpoint with an optional `api_url`; when omitted the backend uses `gallery.external_url` from loaded config. The backend fetches remote JSON, downloads each unsynced image, uploads it through `StorageService`, creates `background_prompts` rows with remote Chinese prompt text, and reports imported/skipped/failed counts.
 
 **Tech Stack:** Go `net/http`, Gorilla mux, SQLite repository layer, existing `StorageService`, React 18, Vite.
 
@@ -298,7 +298,7 @@ func TestSyncRemoteImportsCurrentPageWithoutSuggest(t *testing.T) {
 
 	repo := db.NewBackgroundPromptRepo(&db.DB{DB: rawDB})
 	store := &fakeStorageService{}
-	h := NewBackgroundPromptHandler(repo, store, nil)
+	h := NewBackgroundPromptHandler(repo, store, nil, "")
 
 	body := strings.NewReader(`{"api_url":"` + remote.URL + `/picGet/api/media?page=1&pageSize=20"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/background-prompts/sync-remote", body)
@@ -606,39 +606,25 @@ Expected: PASS.
 **Files:**
 - Modify: `frontend/src/screens/BackgroundManagerScreen.jsx`
 
-- [ ] **Step 1: Import site config**
+- [ ] **Step 1: Add syncing state**
 
-In `frontend/src/screens/BackgroundManagerScreen.jsx`, add:
-
-```jsx
-import siteConfig from '../../../siteConfig.json';
-```
-
-- [ ] **Step 2: Add syncing state**
-
-Inside `BackgroundManagerScreen`, after `importing` state:
+Inside `BackgroundManagerScreen`, after `importing` state (if not already present):
 
 ```jsx
 const [syncing, setSyncing] = useState(false);
 ```
 
-- [ ] **Step 3: Add sync handler**
+- [ ] **Step 2: Add sync handler**
 
 Inside `BackgroundManagerScreen`, after `handleImportClick`:
 
 ```jsx
 const handleSyncRemote = async () => {
-  const apiUrl = siteConfig?.gallery?.apiUrl;
-  if (!apiUrl) {
-    alert('未配置远端图库地址');
-    return;
-  }
-
   setSyncing(true);
   try {
     const result = await fetchApi('/api/v1/background-prompts/sync-remote', {
       method: 'POST',
-      body: JSON.stringify({ api_url: apiUrl })
+      body: JSON.stringify({})
     });
     await fetchBackgrounds();
     const failures = result.failures?.length ? `，失败 ${result.failed} 条` : '';
@@ -651,7 +637,7 @@ const handleSyncRemote = async () => {
 };
 ```
 
-- [ ] **Step 4: Wire the button**
+- [ ] **Step 3: Wire the button**
 
 Replace:
 
@@ -667,7 +653,7 @@ With:
 </button>
 ```
 
-- [ ] **Step 5: Run frontend build**
+- [ ] **Step 4: Run frontend build**
 
 Run:
 

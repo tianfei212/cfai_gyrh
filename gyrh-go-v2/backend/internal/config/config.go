@@ -188,6 +188,11 @@ func Load(configPath string) (*Config, error) {
 	if !filepath.IsAbs(yamlPath) {
 		yamlPath = filepath.Join(rootDir, configPath)
 	}
+	if !fileExists(yamlPath) && configPath == GetConfigPath() {
+		if legacyPath := filepath.Join(rootDir, "config", "config.yaml"); fileExists(legacyPath) {
+			yamlPath = legacyPath
+		}
+	}
 
 	_ = loadDotEnv(filepath.Join(rootDir, ".env.local"))
 
@@ -232,9 +237,7 @@ func FindProjectRoot() (string, error) {
 
 	dir := current
 	for {
-		cfgPath := filepath.Join(dir, "configs", "config.yaml")
-		backendPath := filepath.Join(dir, "backend")
-		if fileExists(cfgPath) && dirExists(backendPath) {
+		if looksLikeProjectRoot(dir) {
 			return dir, nil
 		}
 
@@ -244,6 +247,20 @@ func FindProjectRoot() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+func looksLikeProjectRoot(dir string) bool {
+	standardConfig := filepath.Join(dir, "configs", "config.yaml")
+	legacyConfig := filepath.Join(dir, "config", "config.yaml")
+	backendPath := filepath.Join(dir, "backend")
+
+	if fileExists(standardConfig) {
+		return true
+	}
+	if fileExists(legacyConfig) {
+		return true
+	}
+	return dirExists(backendPath) && dirExists(filepath.Join(backendPath, "data"))
 }
 
 // GetConfigPath 获取默认配置路径。

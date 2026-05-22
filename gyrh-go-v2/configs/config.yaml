@@ -45,6 +45,7 @@ import:
   generated_dir: ./backend/data/generated_import
   watch_interval_seconds: 10
 
+# 背景管理「同步」使用的远端图库接口完整 URL（须含 path/query）；也可在请求体传 api_url 覆盖
 gallery:
   external_url: http://localhost:9913
 

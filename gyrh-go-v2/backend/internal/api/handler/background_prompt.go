@@ -27,17 +27,20 @@ import (
 
 // BackgroundPromptHandler 提供背景图提示词模板 CRUD 能力。
 type BackgroundPromptHandler struct {
-	repo           *db.BackgroundPromptRepo
-	storageService storage.StorageService
-	qwenAdvisor    qwen.Advisor
+	repo               *db.BackgroundPromptRepo
+	storageService     storage.StorageService
+	qwenAdvisor        qwen.Advisor
+	galleryExternalURL string
 }
 
 // NewBackgroundPromptHandler 创建背景图提示词处理器。
-func NewBackgroundPromptHandler(repo *db.BackgroundPromptRepo, storageService storage.StorageService, qwenAdvisor qwen.Advisor) *BackgroundPromptHandler {
+// galleryExternalURL 来自配置 gallery.external_url；当同步请求未带 api_url 时用作默认远端图库接口地址。
+func NewBackgroundPromptHandler(repo *db.BackgroundPromptRepo, storageService storage.StorageService, qwenAdvisor qwen.Advisor, galleryExternalURL string) *BackgroundPromptHandler {
 	return &BackgroundPromptHandler{
-		repo:           repo,
-		storageService: storageService,
-		qwenAdvisor:    qwenAdvisor,
+		repo:               repo,
+		storageService:     storageService,
+		qwenAdvisor:        qwenAdvisor,
+		galleryExternalURL: strings.TrimSpace(galleryExternalURL),
 	}
 }
 
@@ -432,6 +435,13 @@ func (h *BackgroundPromptHandler) SyncRemote(w http.ResponseWriter, r *http.Requ
 	}
 
 	apiURL := strings.TrimSpace(req.APIURL)
+	if apiURL == "" {
+		apiURL = h.galleryExternalURL
+	}
+	if apiURL == "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "未配置远端图库地址：请在 configs/config.yaml 的 gallery.external_url 中填写完整图库接口 URL，或在请求体中提供 api_url"))
+		return
+	}
 	if err := validateRemoteAPIURL(apiURL); err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, err.Error()))
 		return
@@ -481,8 +491,9 @@ func (h *BackgroundPromptHandler) SyncEnglish(w http.ResponseWriter, r *http.Req
 
 func (h *BackgroundPromptHandler) toBackgroundPromptItem(ctx context.Context, item *db.BackgroundPrompt) map[string]any {
 	imageURL := item.ImageURL
-	if item.ImageAssetID != "" && h.storageService != nil {
-		if url, err := h.storageService.GetImageURL(ctx, item.ImageAssetID); err == nil && url != "" {
+	imageAssetID := strings.TrimSpace(item.ImageAssetID)
+	if imageAssetID != "" {
+		if url, err := h.storageService.GetImageURL(ctx, imageAssetID); err == nil && url != "" {
 			imageURL = url
 		}
 	}
@@ -504,11 +515,19 @@ func (h *BackgroundPromptHandler) toBackgroundPromptItem(ctx context.Context, it
 		"gpt_negative_prompt_zh":    item.GPTNegativePromptZH,
 		"image_asset_id":            item.ImageAssetID,
 		"image_url":                 imageURL,
+		"image_proxy_url":           backgroundPromptProxyURL(imageAssetID),
 		"image_width":               item.ImageWidth,
 		"image_height":              item.ImageHeight,
 		"created_at":                item.CreatedAt.Format(time.RFC3339),
 		"updated_at":                item.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+func backgroundPromptProxyURL(assetID string) string {
+	if assetID == "" {
+		return ""
+	}
+	return "/api/v1/images/view?asset_id=" + url.QueryEscape(assetID)
 }
 
 func decodeImageSize(data []byte) (int, int, error) {

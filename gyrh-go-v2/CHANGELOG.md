@@ -1,0 +1,136 @@
+# CHANGELOG
+
+本文档记录每次会话/迭代对仓库做的实质性改动，按倒序时间排列（最新在最前）。
+每条记录至少包含：日期、更新时间、分支、目的、执行者、文件清单与 commit hash。
+执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
+仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
+
+## 2026-05-22 00:53
+
+- 分支：`feature/fullscreen-responsive-adaptation`
+- 目的：将 Ubuntu 后端 release 调整为真正的单二进制部署形态，前端构建产物内嵌进 `gyrh-server`；同时恢复背景图库 `image_url` 的 OSS 原图 URL 语义，避免前端无法生成正确 OSS 缩略图。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`19a9eef`（本次改动尚未提交，当前值为改动前基准提交）
+
+### 详细修改说明
+
+- 新增 `backend/internal/frontend`，通过 Go `embed` 将 `frontend/dist` 编译进后端二进制，并为 `/assets/`、`/models/selfie_segmentation/`、`/branding/` 返回长期缓存头。
+- 在后端主路由中注册前端 SPA fallback，非 `/api/` 路径由后端直接返回内嵌静态文件或 `index.html`，因此 Nginx 可以将 `/` 全部反向代理到 `127.0.0.1:9913`；同时修复 fallback 依赖 `http.FileServer` 时 `/admin_viewer` 先返回 301、旧服务表现为 404 的问题。
+- 放宽项目根目录识别逻辑，支持单二进制部署时仅存在 `configs/config.yaml`，并兼容旧服务器目录中的 `config/config.yaml`，降低“未找到项目根目录”的部署风险。
+- 更新 `scripts/build_release.sh`，在编译 Ubuntu amd64 后端前自动同步最新前端 `dist` 到 embed 目录，并修复 README 生成时反引号被 shell 执行的问题；`install_nginx.sh` 改为不再检查或读取 `frontend/dist`，而是将所有路径反向代理到单二进制后端。
+- 恢复 `background-prompts` 列表中 `image_url` 返回 OSS 签名原图 URL 的行为，新增 `image_proxy_url` 作为稳定本地代理字段，避免把本地 `/api/v1/images/view?...` 误传给缩略图接口的 `url=` 参数。
+- 后台背景管理页的缩略图改为优先使用 `image_asset_id` 构造 `/api/v1/images/thumbnail?asset_id=...`，保留原有 `400x400` 与 `150x150` 尺寸，确保前端拿到的是正确 OSS 缩略图重定向地址。
+- 增强 `backend/internal/frontend` 回归测试，覆盖全部 MediaPipe 本地关键资源（`binarypb`、WASM、JS、TFLite）均能由单二进制返回 200，防止 `/models/selfie_segmentation/selfie_segmentation.binarypb` 线上缺失类问题再次漏测。
+- 新增 `scripts/verify_release.sh` 到 Ubuntu release，用于部署后同时检查后端直连地址和公网/Nginx 地址是否返回新前端入口、`/admin_viewer`、全部 MediaPipe 本地模型资源。
+- 为 MediaPipe 本地资源 URL 增加版本查询参数 `?v=202605220122`，覆盖 `selfie_segmentation.js`、WASM、`binarypb`、TFLite 和预取列表，绕过浏览器中可能已缓存的旧 404/HTML/WASM 响应。
+- 调整内嵌前端静态路由，缺失的 `/assets/`、`/models/` 等静态资源不再 fallback 到 `index.html`，避免 WASM 请求误拿 HTML 后卡在 `wasm-instantiate`。
+- `manage.sh start` 会在启动前检查 `bin/gyrh-server` 是否可执行，缺少执行权限时自动 `chmod +x`，避免替换二进制后因权限缺失启动失败。
+- 将动态旧图/缩略图缓存窗口调整为 3 分钟：前端所有 `/api/v1/images/thumbnail` 动态图片 URL 追加 3 分钟时间桶 `rv` 参数，刷新或重开浏览器最多复用 3 分钟旧图；后端 `View` 与 `Thumbnail` 响应缓存头同步改为 `Cache-Control: public, max-age=180`。
+- 新增前端 `RefreshingImage`，动态图片加载失败时立即给当前缩略图 URL 追加 `retry` 参数重新请求后端，促使后端重新生成 OSS 签名地址；历史侧栏、历史页、背景图库、背景管理和预览页都接入该机制，避免 OSS 过期后继续等待 3 分钟缓存窗口。
+- 重新生成 Ubuntu amd64 release：`release/gyrh-go-v2-202605221313-19a9eef-ubuntu-amd64.tar.gz`；其中 `bin/gyrh-server` 已验证为 Linux x86-64 ELF，大小约 35M，SHA256 为 `390e445a847b897950ffe908282d7acfcb95932968ce608bbb430f21508f20a5`。
+
+### 验证
+
+- `cd backend && go test ./...`
+- `cd frontend && node --test src/utils/*.test.js && npm run build`
+- `file release/gyrh-go-v2-202605221313-19a9eef-ubuntu-amd64/bin/gyrh-server`
+- `shasum -a 256 release/gyrh-go-v2-202605221313-19a9eef-ubuntu-amd64/bin/gyrh-server`
+- `rg "retry=|refreshImageUrl|rv=|202605220122" frontend/dist/assets/index-CgIcyYDU.js`
+- `curl -i http://127.0.0.1:19913/admin_viewer`
+- `curl -I http://127.0.0.1:19913/models/selfie_segmentation/selfie_segmentation_landscape.tflite`
+- `curl -I http://127.0.0.1:19913/models/selfie_segmentation/selfie_segmentation.binarypb`
+
+## 2026-05-21 23:15
+
+- 分支：`feature/fullscreen-responsive-adaptation`
+- 目的：补齐前端全屏自适应能力，覆盖展厅 kiosk、大屏横屏、竖屏终端、后台管理页、低高度终端和移动/平板边缘尺寸；同时补充自动化响应式检查与中文变更记录。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`19a9eef`（本次改动尚未提交，当前值为改动前基准提交）
+
+### 详细修改说明
+
+- 全局布局：
+  - 在 `frontend/src/styles.css` 增加 `--app-viewport-height: 100dvh`，将主要页面高度从固定 `100vh` 迁移到动态视口高度，降低全屏终端壳、移动浏览器地址栏和低高度屏幕造成的按钮裁切风险。
+  - 调整 `.app-shell` 为横向裁切、纵向可滚动，避免整页 `overflow: hidden` 导致边缘尺寸下关键操作不可达。
+  - 将 `.canvas-frame`、`.workbench-screen`、`.simple-screen`、`.history-panel`、`.table-panel`、`.capture-shell`、`.rendering-shell`、`.centered-screen` 等核心容器统一接入动态视口高度。
+
+- kiosk / 展厅模式：
+  - 在 `frontend/src/theme/kiosk.css` 保留大屏横屏下的 16:9 展示比例和最大宽度。
+  - 新增 `max-width: 1180px` 或 `orientation: portrait` 断点：窄屏和竖屏时取消固定 `aspect-ratio: 16 / 9`，改为全宽、动态高度自适应。
+  - 为 kiosk 导航按钮增加窄屏下的 `clamp()` 尺寸，避免按钮过宽挤出屏幕，同时保留触摸操作面积。
+  - 为低高度终端取消 kiosk 顶栏固定最小高度，减少内容被顶部区域压缩。
+
+- 拍摄页：
+  - 在 `frontend/src/styles.css` 新增低高度断点 `@media (max-height: 760px)`。
+  - 低高度下将 `.opacity-slider-wrapper` 和 `.zoom-slider-wrapper` 从左右竖向控件改为底部横向控件。
+  - 低高度下取消 `.vertical-slider` 的旋转，压缩按钮和间距，保证摄像头预览、拍摄、放弃、使用等核心动作可见或可达。
+
+- 预览页：
+  - 在 `frontend/src/screens/PreviewScreen.jsx` 将对比预览区域从内联固定 flex 样式迁移到 `.preview-stage-container` 响应式 class。
+  - 在 `frontend/src/styles.css` 为预览对比增加窄屏 `max-width: 900px` 断点，原图/效果图从左右并排切换为上下排列。
+  - 单图预览通过 `.single-preview` 控制最大宽度，不再依赖组件内联布局。
+  - 全屏预览图片从 `objectFit: 'cover'` 改为 `objectFit: 'contain'`，高度从 `100vh` 改为 `100dvh`，避免全屏查看时裁掉人像主体。
+  - 为二维码弹窗和预览水印增加小屏尺寸约束，避免遮挡和横向溢出。
+
+- 后台管理页：
+  - 在 `frontend/src/screens/StyleManagerScreen.jsx` 移除风格转换表格中固定的内联 `gridTemplateColumns`，改用 `.style-table-grid`。
+  - 在 `frontend/src/screens/BackgroundManagerScreen.jsx` 和 `frontend/src/screens/StyleManagerScreen.jsx` 移除弹窗内固定 `width: 80%`、`maxWidth: 800px`、`maxHeight: 90vh` 等内联约束，交给统一 CSS 控制。
+  - 在背景编辑弹窗中把双列表单改为 `.responsive-form-grid`，小屏下自动变为单列。
+  - 为后台表格移动端行内容补充 `data-label`，窄屏下隐藏表头后仍能识别字段含义。
+  - 为 `.table-shell`、`.modal-content`、`.modal-overlay` 增加局部滚动和视口内高度控制，使平板/小屏下保存、取消、关闭按钮可达。
+
+- 测试与脚本：
+  - 在 `frontend/package.json` 新增 `npm test` 脚本，统一运行 Node 内置测试。
+  - 新增 `frontend/src/utils/responsiveLayout.test.js`，覆盖以下响应式规则：
+    - 全局布局必须使用动态视口高度。
+    - kiosk 窄屏或竖屏必须取消固定 16:9。
+    - 拍摄页低高度必须启用横向控制布局。
+    - 预览对比布局必须由响应式 class 控制。
+    - 后台风格管理表格不得继续依赖内联固定列宽。
+
+### 文件清单
+
+- `CHANGELOG.md`：按旧规则改为中文倒序记录，并补充本次迭代详细说明、测试计划与验证结果。
+- `frontend/package.json`：新增 `test` 脚本。
+- `frontend/src/styles.css`：新增动态视口高度、全局滚动策略、预览/拍摄/后台表格/弹窗/移动端断点规则。
+- `frontend/src/theme/kiosk.css`：新增 kiosk 窄屏、竖屏、低高度自适应规则。
+- `frontend/src/screens/PreviewScreen.jsx`：迁移预览对比布局 class，调整全屏图片适配策略。
+- `frontend/src/screens/StyleManagerScreen.jsx`：移除固定内联表格列宽，补充移动端字段标签，弹窗尺寸交给 CSS。
+- `frontend/src/screens/BackgroundManagerScreen.jsx`：弹窗尺寸和双列表单迁移到响应式 CSS，补充移动端字段标签。
+- `frontend/src/utils/responsiveLayout.test.js`：新增响应式布局回归测试。
+
+### 测试计划
+
+- 视口矩阵：
+  - kiosk 横屏：`1920x1080`、`2560x1440`、`3840x2160`
+  - kiosk 竖屏：`1080x1920`、`1440x2560`
+  - 后台桌面：`1366x768`、`1440x900`、`1536x864`、`1920x1080`
+  - 平板：`768x1024`、`1024x768`、`834x1194`
+  - 手机边缘宽度：`390x844`、`430x932`
+  - 低高度终端：`1280x720`、`1024x600`
+- 功能流程：
+  - kiosk `/`：工作台加载、背景上传/选择、历史侧栏预览、进入拍摄、进入预览。
+  - admin `/admin_viewer`：历史记录、背景库、SKILL 管理、风格转换配置、登录/退出相关页面。
+  - 拍摄页：摄像头预览可见，透明度/人物大小控制可达，拍摄/放弃/使用按钮可达。
+  - 预览页：对比模式窄屏上下排列，二维码弹窗可关闭，全屏预览不裁切主体。
+  - 后台弹窗：背景和风格编辑弹窗可滚动、保存、取消、关闭。
+- 逻辑与布局：
+  - 除表格局部滚动外，不应出现不可控的整页横向溢出。
+  - 关键按钮必须可见或可通过纵向滚动到达。
+  - 大屏 kiosk 保持 16:9 展示效果。
+  - 竖屏和低高度终端不能继承大屏固定比例限制。
+- 性能：
+  - 执行 `npm run build`，确认 Vite 生产构建通过。
+  - 检查构建产物体积，确认本次主要是 CSS 与小型测试变更，没有新增运行时依赖。
+
+### 验证结果
+
+- `npm test`：通过，36 个测试全部成功。
+- `npm run build`：通过，Vite 生产构建成功；产物约 `207.38 kB` JS / `33.41 kB` CSS。
+- 浏览器功能/自适应验证：
+  - kiosk `/`：已检查 `1920x1080` 横屏和 `1080x1920` 竖屏，关键导航和工作台控件可访问。
+  - admin `/admin_viewer`：已检查 `1366x768` 和 `768x1024`，后台导航、风格配置页、风格新建弹窗、取消操作可访问。
+- 浏览器网络/控制台：
+  - 当前 API 请求返回 200。
+  - 观察到一条 `/api/v1/images/` 图片资源 404，判断为已有数据中的图片 URL 为空或缺失，不是本次布局改动产生的阻断。
+- IDE 诊断：本次触达文件无 linter 错误。
