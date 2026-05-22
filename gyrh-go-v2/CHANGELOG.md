@@ -5,6 +5,50 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-22 22:20
+
+- 分支：`feature/category-responsive-integration`
+- 目的：完成 `feature/background-category-management` 与 `feature/fullscreen-responsive-adaptation` 的集成合并；保留前端响应式与背景缓存逻辑，并叠加背景图二级分类管理、绑定、筛选和线上数据库升级脚本。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`acc3d95`
+
+### 合并说明
+
+- 从 `feature/fullscreen-responsive-adaptation` 新建集成分支 `feature/category-responsive-integration`，手动合并 `feature/background-category-management`。
+- 前端以响应式分支为基底，保留 Dashboard 背景缓存、响应式布局和管理表格的 `data-label` 适配，再接入分类选择、分类管理弹窗和背景-分类多选绑定。
+- 后端同时保留远端图库同步的 `gallery.external_url` 默认接口逻辑，以及背景分类仓库、分类 CRUD、背景分类绑定和分类筛选接口。
+- 新增 `scripts/upgrade_background_categories.sh`，用于线上 SQLite 数据库创建分类表、绑定表、默认 `default/default` 分类，并回填未绑定背景。
+
+### 修改文件
+
+- `backend/internal/db/background_category.go`、`backend/internal/db/background_category_test.go`：新增背景分类仓库、默认分类、绑定替换、删除回归默认分类等逻辑和测试。
+- `backend/internal/db/background_prompt.go`、`backend/internal/db/db.go`：新增分类筛选查询、绑定清理和数据库建表迁移。
+- `backend/internal/api/handler/background_category.go`、`backend/internal/api/handler/background_prompt.go`、`backend/internal/api/router.go`：新增分类 API、背景绑定 API，并让背景列表返回分类信息。
+- `backend/internal/platform/app/app.go`：初始化分类仓库并在启动时确保默认绑定。
+- `frontend/src/screens/DashboardScreen.jsx`、`frontend/src/screens/BackgroundManagerScreen.jsx`：接入工作台分类筛选、管理页分类维护和背景绑定 UI。
+- `frontend/src/app/AppShell.jsx`、`frontend/src/utils/backgroundCache.js`、`frontend/src/utils/backgroundPagination.js`：让背景缓存和分页 URL 支持 `category_id`，避免不同分类缓存串用。
+- `frontend/src/utils/backgroundCache.test.js`、`frontend/src/utils/backgroundPagination.test.js`：覆盖分类缓存隔离和分类 URL 参数。
+- `scripts/upgrade_background_categories.sh`：新增线上数据库升级脚本。
+- `CHANGELOG.md`：新增本次集成记录。
+
+### 验证
+
+- 前端依赖安装：`npm ci --prefer-offline --no-audit --no-fund`。
+- 前端单元测试通过：`npm test`，43/43 通过。
+- 前端生产构建通过：`npm run build`。
+- 后端全量测试通过：`go test ./...`。
+- 运行 smoke：
+  - 前端 `http://127.0.0.1:9912/` 返回 200。
+  - 后端 `http://127.0.0.1:9913/` 返回 200。
+  - 受保护分类接口 `GET /api/v1/background-categories` 未登录返回 401。
+  - 本地运行库分类校验结果为分类 1 条、绑定 9 条、未绑定背景 0 条。
+- 前后端已从集成 worktree 重启：前端监听 `9912`，后端监听 `9913`。
+
+### 未提交内容说明
+
+- 本次提交不包含运行态文件：`backend/data/gyrh.db-shm`、`backend/data/gyrh.db-wal`、`frontend/node_modules/`、`frontend/dist/`、`backend/internal/frontend/dist/`、日志目录和本地 `bin/oss-cli` 软链接。
+- 集成 worktree 为运行验证临时使用本地 aliOSS 配置与环境变量覆盖，相关私有配置没有纳入提交。
+
 ## 2026-05-22 17:08
 
 - 分支：`feature/fullscreen-responsive-adaptation`
