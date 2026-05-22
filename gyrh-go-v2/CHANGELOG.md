@@ -5,6 +5,47 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-22 22:43
+
+- 分支：`feature/category-responsive-integration`
+- 目的：修复背景分类集成后的运行态前端错误和背景管理表格显示问题，并重新校准本地运行验证的数据库、鉴权和 OSS 配置。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`97046bc`
+
+### 本次问题
+
+- 工作台打开时报 `ReferenceError: fetchApi is not defined`，导致背景分类列表加载失败。
+- 背景管理页在当前缩放/响应式布局下，把 `data-label` 插入到了单元格内容前，显示成“图片名称xxx”和“类型default/default”。
+- 本地验证过程中曾错误地从 integration worktree 启动后端，先后出现过测试库数据、鉴权 env 不一致、OSS 未启动、OSS bucket 前缀错误等运行态问题。
+
+### 解决方案
+
+- `DashboardScreen.jsx` 补充 `fetchApi` import，恢复工作台分类接口请求。
+- `BackgroundManagerScreen.jsx` 移除背景管理表格行中会拼接到内容前的 `data-label`，保留表头展示，避免名称和类型内容被加前缀。
+- 本地重启时使用主工作区真实数据库路径、主工作区 `.env.local` / `frontend/.env.local` 和真实 `configs/alioss-agent.yaml`，确保背景数据、签名鉴权、OSS 背景 bucket 前缀一致。
+
+### 修改文件
+
+- `frontend/src/screens/DashboardScreen.jsx`：补充 `fetchApi` import。
+- `frontend/src/screens/BackgroundManagerScreen.jsx`：移除背景管理表格内容列的 `data-label`，避免响应式标签拼入文本。
+- `CHANGELOG.md`：新增本次排障和修复记录。
+
+### 验证
+
+- 前端单元测试通过：`npm test`，43/43 通过。
+- 前端生产构建通过：`npm run build`，生成新入口 `/assets/index-C1D8LZwJ.js`。
+- 后端已同步新前端构建到 embed 目录，并重新启动。
+- 当前运行端口：
+  - 后端：`9913`。
+  - 背景 OSS：`18080`。
+  - 生成图 OSS：`18081`。
+- 带签名背景列表 API 验证返回 `code=0`、`total=31`。
+- 抽查背景管理首页前 10 个 `image_asset_id`，OSS `/view/...` 均返回 `200`。
+
+### 未提交内容说明
+
+- 本次提交不包含运行态数据库文件、WAL/SHM 文件、`frontend/dist/`、`backend/internal/frontend/dist/`、日志目录、`.env.local`、`configs/alioss-agent.yaml` 或本地 `bin/oss-cli` 软链接。
+
 ## 2026-05-22 22:20
 
 - 分支：`feature/category-responsive-integration`
