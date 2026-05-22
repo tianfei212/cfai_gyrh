@@ -3,6 +3,7 @@ import { WorkbenchLayout, HeaderIcon, HistorySidebar } from '../components/Layou
 import { RefreshingImage } from '../components/RefreshingImage';
 import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
 import { DEFAULT_BRANDING } from '../config/branding';
+import { fetchApi } from '../services/api';
 import {
   buildCaptureBackgroundThumbnailUrl,
   buildImageThumbnailUrl,

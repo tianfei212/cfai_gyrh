@@ -629,19 +629,18 @@ export function BackgroundManagerScreen({ onHome, onHistory, onLogout, onToggleM
           ) : (
             backgrounds.map((row) => (
               <div className="table-row table-grid" key={row.id} style={tableGridStyle}>
-                <span data-label="图片名称" title={row.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name || '-'}</span>
+                <span title={row.name} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name || '-'}</span>
                 <div 
-                  data-label="缩略图"
                   className="thumb-swatch" 
                 >
                   {row.image_url || row.image_asset_id ? (
                     <RefreshingImage src={buildBackgroundThumbnailUrl(row, 150, 150)} alt={row.name || '背景缩略图'} />
                   ) : null}
                 </div>
-                <span data-label="类型" title={formatCategoryList(row.categories)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCategoryList(row.categories)}</span>
-                <span data-label="Wan 提示词" title={row.wan_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.wan_prompt_zh || '-'}</span>
-                <span data-label="Gemini 提示词" title={row.gemini_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gemini_prompt_zh || '-'}</span>
-                <span data-label="GPT 提示词" title={row.gpt_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gpt_prompt_zh || '-'}</span>
+                <span title={formatCategoryList(row.categories)} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCategoryList(row.categories)}</span>
+                <span title={row.wan_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.wan_prompt_zh || '-'}</span>
+                <span title={row.gemini_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gemini_prompt_zh || '-'}</span>
+                <span title={row.gpt_prompt_zh} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.gpt_prompt_zh || '-'}</span>
                 <div className="table-actions">
                   {row.image_url && <button className="mini-outline" type="button" onClick={() => setPreviewingItem(row)}>查看原图</button>}
                   <button className="mini-outline" type="button" onClick={() => setCategoryBindingItem(row)}>选择类型</button>
