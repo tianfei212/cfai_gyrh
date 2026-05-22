@@ -49,6 +49,16 @@
 - 重新生成并启动 macOS ARM64 单二进制测试包：`release/gyrh-go-v2-202605221700-1dfeee6-darwin-arm64.tar.gz`。
 - 当前本地测试服务 `http://127.0.0.1:9913/admin_viewer` 返回新前端入口 `/assets/index-DiGlKjB2.js`，旧入口 `/assets/index-CgIcyYDU.js` 已不再由该服务返回。
 - 验证新 macOS 二进制内嵌新前端入口，SHA256：`1fb4977350cfa345baacd97e3a0248db1bc248459a3f52d12c14e5ca9fba893e`。
+- 重新生成 Ubuntu amd64 单二进制包：`release/gyrh-go-v2-202605221710-844df43-ubuntu-amd64.tar.gz`。
+- Ubuntu 单文件更新目标：`release/gyrh-go-v2-202605221710-844df43-ubuntu-amd64/bin/gyrh-server`。
+- Ubuntu 二进制验证为 Linux x86-64 ELF，并确认内嵌：
+  - 最新前端入口 `/assets/index-DiGlKjB2.js`。
+  - MediaPipe `selfie_segmentation.binarypb` 与 `selfie_segmentation_solution_wasm_bin.wasm`。
+  - 背景图库 `ORDER BY name DESC, id DESC` 排序逻辑。
+  - 风格转换 `foreground_asset_id` 修复逻辑。
+- Ubuntu release 包内确认没有 `frontend/dist` 目录，避免误用第二套前端文件；`install_nginx.sh` 确认为仅 `proxy_pass http://127.0.0.1:$BACKEND_PORT`，没有 `root` / `alias` / `try_files` 静态目录配置。
+- Ubuntu `bin/gyrh-server` SHA256：`617b00600571a8a6c6866c15444ea2f9351a07d484aec20a65798758a744d168`。
+- Ubuntu tar.gz SHA256：`7a183a2416a95b3684f69255a1b344a5e789cb9482abb285a83440451a8ed53a`。
 
 ### 未提交内容说明
 
