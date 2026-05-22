@@ -6,6 +6,7 @@ import {
   LANDSCAPE_THUMB_WIDTH,
   appendImageCacheBucket,
   buildCaptureBackgroundThumbnailUrl,
+  buildFullImagePreviewUrl,
   buildImageThumbnailUrl,
   getImageCacheBucket,
   getImagePreloadUrls,
@@ -40,6 +41,23 @@ test('builds 16:9 thumbnail URL from image URL when asset id is missing', () => 
 
 test('returns empty thumbnail URL without an image source', () => {
   assert.equal(buildImageThumbnailUrl({}), '');
+});
+
+test('builds full image preview URL preferring OSS image URL', () => {
+  assert.equal(
+    buildFullImagePreviewUrl({
+      assetId: 'asset/one.png',
+      imageUrl: 'https://example.com/full.webp',
+    }),
+    'https://example.com/full.webp',
+  );
+});
+
+test('builds full image preview URL from asset id when image URL is missing', () => {
+  assert.equal(
+    buildFullImagePreviewUrl({ assetId: 'asset/one.png' }),
+    '/api/v1/images/view?asset_id=asset%2Fone.png&rv=42',
+  );
 });
 
 test('builds capture background thumbnail URL for selected backgrounds', () => {

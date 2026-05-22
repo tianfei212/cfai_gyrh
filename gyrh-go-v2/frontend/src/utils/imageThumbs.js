@@ -14,6 +14,16 @@ export function buildCaptureBackgroundThumbnailUrl({ assetId, imageUrl } = {}) {
   return buildThumbnailUrl({ assetId, imageUrl, size });
 }
 
+export function buildFullImagePreviewUrl({ assetId, imageUrl } = {}) {
+  if (imageUrl) {
+    return imageUrl;
+  }
+  if (assetId) {
+    return appendImageCacheBucket(`/api/v1/images/view?asset_id=${encodeURIComponent(assetId)}`);
+  }
+  return '';
+}
+
 export function getImagePreloadUrls(items = []) {
   const urls = new Set();
   for (const item of items) {

@@ -860,6 +860,42 @@ textarea {
   z-index: 1;
 }
 
+.gallery-preview-button {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border: 1px solid rgba(186, 214, 255, 0.48);
+  border-radius: 999px;
+  color: #f4f8ff;
+  background: rgba(12, 20, 34, 0.58);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  opacity: 0.88;
+  transition: transform 0.18s ease, opacity 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.gallery-preview-button:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(50, 91, 161, 0.72);
+}
+
+.gallery-preview-button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 .tone-blue {
   background:
     linear-gradient(180deg, rgba(54, 76, 124, 0.96), rgba(19, 33, 58, 0.98)),
@@ -1496,7 +1532,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: 2%;
+  overflow: hidden;
   background:
     radial-gradient(circle at 30% 20%, rgba(118, 151, 210, 0.2), transparent 28%),
     rgba(3, 8, 18, 0.78);
@@ -1504,24 +1541,28 @@ textarea {
 }
 
 .image-preview-modal {
-  width: min(1180px, 94vw);
-  max-height: 92vh;
+  width: 94%;
+  height: 92%;
+  max-width: 94%;
+  max-height: 92%;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 2%;
+  padding: 1.5%;
   border: 1px solid rgba(132, 157, 196, 0.36);
-  border-radius: 1.35rem;
+  border-radius: 2%;
   background: rgba(12, 20, 34, 0.82);
   box-shadow: 0 32px 90px rgba(0, 0, 0, 0.46);
+  overflow: hidden;
 }
 
 .image-preview-header {
+  flex: 0 0 8%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.2rem 0.25rem 0;
+  gap: 2%;
+  padding: 0.5% 0.5% 0;
 }
 
 .image-preview-header p,
@@ -1541,25 +1582,55 @@ textarea {
   font-weight: 700;
 }
 
+.image-preview-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border: 1px solid rgba(186, 214, 255, 0.42);
+  border-radius: 999px;
+  color: #f4f8ff;
+  background: rgba(12, 20, 34, 0.62);
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.image-preview-close:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(50, 91, 161, 0.72);
+}
+
+.image-preview-close svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 .image-preview-stage {
-  min-height: 18rem;
-  max-height: calc(92vh - 6.5rem);
+  flex: 1 1 88%;
+  height: 88%;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid rgba(97, 119, 153, 0.3);
-  border-radius: 1rem;
+  border-radius: 1.5%;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
     rgba(3, 8, 18, 0.58);
 }
 
 .image-preview-stage img {
+  width: 100%;
+  height: 100%;
   max-width: 100%;
-  max-height: calc(92vh - 7rem);
+  max-height: 100%;
   object-fit: contain;
-  border-radius: 0.8rem;
+  border-radius: 1%;
   box-shadow: 0 18px 55px rgba(0, 0, 0, 0.36);
 }
 

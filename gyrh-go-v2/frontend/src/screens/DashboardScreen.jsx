@@ -1,11 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { WorkbenchLayout, HeaderIcon, HistorySidebar } from '../components/Layout';
 import { RefreshingImage } from '../components/RefreshingImage';
-import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
+import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, SearchIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
 import { DEFAULT_BRANDING } from '../config/branding';
 import { fetchApi } from '../services/api';
 import {
   buildCaptureBackgroundThumbnailUrl,
+  buildFullImagePreviewUrl,
   buildImageThumbnailUrl,
   getImagePreloadUrls,
   preloadImages,
@@ -31,9 +33,14 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [previewingBackground, setPreviewingBackground] = useState(null);
   const limit = 6;
   const selectedCategory = categories.find(category => category.id === selectedCategoryId);
   const totalPages = getTotalPages(total, limit);
+  const previewImageUrl = buildFullImagePreviewUrl({
+    assetId: previewingBackground?.image_asset_id,
+    imageUrl: previewingBackground?.image_url,
+  });
 
   const fetchBackgrounds = async ({ force = false } = {}) => {
     if (!backgroundCache) return;
@@ -120,6 +127,11 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
     }
   };
 
+  const handlePreviewBackground = (image) => (e) => {
+    e.stopPropagation();
+    setPreviewingBackground(image);
+  };
+
   const processFile = (file) => {
     if (file && file.type.startsWith('image/')) {
       const imageUrl = URL.createObjectURL(file);
@@ -153,6 +165,35 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
     const file = e.dataTransfer.files?.[0];
     processFile(file);
   };
+
+  const previewModal = previewingBackground && (
+    <div className="image-preview-overlay" onClick={() => setPreviewingBackground(null)}>
+      <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="image-preview-header">
+          <div>
+            <p>背景图预览</p>
+            <h3>{previewingBackground.name || `背景 ${previewingBackground.id}`}</h3>
+          </div>
+          <button
+            className="image-preview-close"
+            type="button"
+            onClick={() => setPreviewingBackground(null)}
+            aria-label="关闭预览"
+            title="关闭"
+          >
+            <XIcon />
+          </button>
+        </div>
+        <div className="image-preview-stage">
+          {previewImageUrl ? (
+            <RefreshingImage src={previewImageUrl} alt={previewingBackground.name || '背景图预览'} />
+          ) : (
+            <div style={{ padding: '2%', color: 'rgba(255,255,255,0.65)' }}>暂无可预览图片</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <WorkbenchLayout
@@ -290,6 +331,17 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
                 {card.image_url || card.image_asset_id ? (
                   <RefreshingImage src={buildImageThumbnailUrl({ assetId: card.image_asset_id, imageUrl: card.image_url })} alt={card.name || `背景 ${card.id}`} />
                 ) : null}
+                {(card.image_url || card.image_asset_id) && (
+                  <button
+                    className="gallery-preview-button"
+                    type="button"
+                    onClick={handlePreviewBackground(card)}
+                    aria-label={`放大预览 ${card.name || `背景 ${card.id}`}`}
+                    title="放大"
+                  >
+                    <SearchIcon />
+                  </button>
+                )}
                 <span style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 8px', borderRadius: '4px' }}>{card.name || `背景 ${card.id}`}</span>
               </article>
             ))
@@ -316,6 +368,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
           </button>
         </div>
       </section>
+      {previewModal && typeof document !== 'undefined' ? createPortal(previewModal, document.body) : previewModal}
     </WorkbenchLayout>
   );
 }
