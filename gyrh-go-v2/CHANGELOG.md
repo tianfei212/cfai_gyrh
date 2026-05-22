@@ -5,6 +5,56 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-23 00:08
+
+- 分支：`main`
+- 目的：发布 `3.0.1`，同步背景分类管理、全终端响应式适配、工作台背景图全图放大预览和单二进制 release 产物说明。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- tag：`3.0.1`
+- commit hash：本条记录随本次提交生成。
+
+### 发布内容
+
+- 合并并保留 `feature/fullscreen-responsive-adaptation` 的前端响应式与缓存逻辑，叠加背景图类型管理能力。
+- 背景图类型支持“大类/小类”二级分类、`default/default` 兜底分类、类型 CRUD、背景图多类型绑定和工作台按类型筛选。
+- 工作台背景图库新增放大镜 HUD 图标，点击后通过后端 OSS 全图 WebP 地址打开大图预览。
+- 预览弹窗改为 React Portal 渲染到 `document.body`，使用百分比布局与 `object-fit: contain` 约束在当前视口内，避免移动端或低高度终端出现长滚动。
+- 放大入口使用放大镜图标，关闭入口使用 `X` 图标。
+- release 包继续保持“前端内嵌到 `gyrh-server` 单文件后端”的部署形态，线上只更新对应平台的 `bin/gyrh-server` 即可获得本次前端功能更新。
+
+### 数据库与兼容性
+
+- 新增 `background_categories` 与 `background_category_bindings`，背景图和类型为多对多关系。
+- 数据库升级脚本会创建 `default/default` 类型，并将历史未绑定背景图回填到该类型。
+- 删除非默认类型时，相关背景图会回归 `default/default`；`default/default` 不允许删除。
+- 线上已有正确业务数据时，不应覆盖线上 `backend/data/gyrh.db`；只需执行/确认升级脚本和替换二进制。
+
+### Release 产物
+
+- 当前项目目录下的 release 产物：
+  - `release/gyrh-go-v2-202605222328-44a412f-darwin-arm64.tar.gz`
+  - `release/gyrh-go-v2-202605222328-44a412f-ubuntu-amd64.tar.gz`
+- macOS ARM64 包内 `bin/gyrh-server` 为 Mach-O arm64 单文件。
+- Ubuntu amd64 包内 `bin/gyrh-server` 为 Linux x86-64 ELF 单文件。
+- 两个平台二进制均已确认内嵌最新前端入口：
+  - `/assets/index-tdw_bnPy.js`
+  - `/assets/index-vaheVFXX.css`
+
+### 验证
+
+- 前端单元测试通过：`npm test`，45/45 通过。
+- 前端生产构建通过：`npm run build -- --outDir ../backend/internal/frontend/dist --emptyOutDir`。
+- macOS release 单文件已从当前项目 `release/` 目录启动测试，`/`、`/admin_viewer`、MediaPipe 模型资源返回 `200`。
+- 带签名背景列表 API 验证通过：`code=0`、`total=31`。
+- Ubuntu amd64 二进制已静态验证为 Linux x86-64 ELF，并确认内嵌最新前端入口与 MediaPipe 资源；当前 macOS 环境无法直接运行 Linux ELF。
+- 当前测试服务使用当前项目目录的 `release/gyrh-go-v2-202605222328-44a412f-darwin-arm64`，开发前端 `9912` 已关闭。
+
+### 部署注意事项
+
+- 如果目标机器已有正确配置、数据库、生成图目录和 OSS 二进制，本次前端与后端代码更新只需替换对应平台的 `bin/gyrh-server`。
+- 如果目标机器缺少 `bin/oss-cli`，需要补齐对应平台 aliOSS 二进制；否则后端自动启动 OSS 时会失败。
+- `release/`、运行态数据库、WAL/SHM、缓存和本地 OSS 软链接不纳入 git 提交。
+
 ## 2026-05-22 23:26
 
 - 分支：`main`
