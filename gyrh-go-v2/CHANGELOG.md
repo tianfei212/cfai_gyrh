@@ -5,6 +5,29 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-22 22:46
+
+- 分支：`main`
+- 目的：将已完成验证的 `feature/category-responsive-integration` 提升为本地主分支，作为背景分类管理与响应式适配集成后的主线版本。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：本条记录随本次提交生成。
+
+### 说明
+
+- 当前集成分支已包含 `origin/main` 与本地 `master` 历史，可快进为主线。
+- 保留此前集成提交：
+  - `acc3d95`：背景分类管理与响应式 shell 合并。
+  - `08cee35`：记录集成 changelog。
+  - `97046bc`：修复运行态前端分类与背景管理显示问题。
+  - `055694f`：记录运行态修复 changelog。
+- 本次仅记录分支提升动作，不新增业务代码。
+
+### 验证
+
+- 分支关系检查确认 `origin/main` 是当前集成分支祖先。
+- 本地 `main` 分支不存在，避免覆盖已有本地 `main` 工作区。
+- 未提交运行态数据库、WAL/SHM、日志、`.env.local`、aliOSS 私有配置或本地软链接。
+
 ## 2026-05-22 22:43
 
 - 分支：`feature/category-responsive-integration`
