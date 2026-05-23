@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { WorkbenchLayout, HeaderIcon, HistorySidebar } from '../components/Layout';
 import { RefreshingImage } from '../components/RefreshingImage';
-import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, SearchIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
+import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, SearchIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from '../components/Icons';
 import { DEFAULT_BRANDING } from '../config/branding';
 import { fetchApi } from '../services/api';
 import {
@@ -15,26 +15,31 @@ import {
 import { getModelLabel, isGPTModel } from '../utils/modelProvider';
 import { getTotalPages } from '../utils/backgroundPagination';
 
+const DEFAULT_BACKGROUND_CATEGORY_PARENT = '场景';
+const DEFAULT_BACKGROUND_CATEGORY_CHILD = '电影';
+
 function formatCategoryLabel(category) {
   const parentName = category?.parent_name || 'default';
   const childName = category?.child_name || 'default';
   return `${parentName}/${childName}`;
 }
 
+function isDefaultWorkbenchCategory(category) {
+  return category?.parent_name === DEFAULT_BACKGROUND_CATEGORY_PARENT && category?.child_name === DEFAULT_BACKGROUND_CATEGORY_CHILD;
+}
+
 export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, onPreview, backgroundCache, model, branding = DEFAULT_BRANDING }) {
   const fileInputRef = useRef(null);
   const backgroundRequestSeq = useRef(0);
-  const [uploadedImage, setUploadedImage] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [backgrounds, setBackgrounds] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState(0);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [previewingBackground, setPreviewingBackground] = useState(null);
-  const limit = 6;
+  const limit = 9;
   const selectedCategory = categories.find(category => category.id === selectedCategoryId);
   const totalPages = getTotalPages(total, limit);
   const previewImageUrl = buildFullImagePreviewUrl({
@@ -43,7 +48,13 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
   });
 
   const fetchBackgrounds = async ({ force = false } = {}) => {
-    if (!backgroundCache) return;
+    if (!backgroundCache || selectedCategoryId === null) return;
+    if (selectedCategoryId === 0) {
+      setBackgrounds([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
     const requestId = backgroundRequestSeq.current + 1;
     backgroundRequestSeq.current = requestId;
     try {
@@ -70,9 +81,14 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
   const fetchCategories = async () => {
     try {
       const data = await fetchApi('/api/v1/background-categories');
-      setCategories(data || []);
+      const nextCategories = data || [];
+      const defaultCategory = nextCategories.find(isDefaultWorkbenchCategory);
+      setCategories(nextCategories);
+      setSelectedCategoryId(defaultCategory?.id || 0);
     } catch (err) {
       console.error('Failed to fetch background categories:', err);
+      setSelectedCategoryId(0);
+      setLoading(false);
     }
   };
 
@@ -119,14 +135,6 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
     }
   };
 
-  const handleRemoveImage = (e) => {
-    e.stopPropagation();
-    setUploadedImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
   const handlePreviewBackground = (image) => (e) => {
     e.stopPropagation();
     setPreviewingBackground(image);
@@ -135,34 +143,15 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
   const processFile = (file) => {
     if (file && file.type.startsWith('image/')) {
       const imageUrl = URL.createObjectURL(file);
-      setUploadedImage(imageUrl);
+      if (onCapture) {
+        onCapture(imageUrl);
+      }
       console.log('File processed:', file.name);
     }
   };
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0];
-    processFile(file);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const file = e.dataTransfer.files?.[0];
     processFile(file);
   };
 
@@ -211,77 +200,27 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
         <HistorySidebar onPreview={onPreview} />
       }
     >
-      <section className="glass-section hero-workspace">
-        <div className="section-topline">
-          <h2>快速选择场景</h2>
-          <span>{page} / {totalPages}</span>
-        </div>
-        <div 
-          className={`upload-stage ${isDragging ? 'dragging' : ''} ${uploadedImage ? 'has-image' : ''}`}
-          onClick={handleUploadClick}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          style={{ 
-            cursor: 'pointer'
-          }}
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-            accept="image/*"
-          />
-          
-          {uploadedImage ? (
-            <>
-              <img 
-                src={uploadedImage} 
-                alt="Uploaded background" 
-                style={{ 
-                  width: '100%', 
-                  height: 'auto', 
-                  maxHeight: '70vh',
-                  objectFit: 'contain',
-                  display: 'block'
-                }} 
-              />
-              <button 
-                className="close-stage-button"
-                onClick={handleRemoveImage}
-                type="button"
-                aria-label="Remove image"
-              >
-                <XIcon />
-              </button>
-              <div className="hud-action-overlay">
-                <button 
-                  className="hud-use-button"
-                  onClick={handleUseImage(uploadedImage)}
-                  type="button"
-                >
-                  <CameraIcon />
-                  <span>使用</span>
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="upload-badge">
-                <PlusIcon />
-              </div>
-              <h3>点击或拖拽上传背景图</h3>
-              <p>支持 JPG / PNG / WebP，建议 4K 高清图</p>
-            </>
-          )}
-        </div>
-      </section>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+        accept="image/*"
+      />
 
       <section className="glass-section gallery-section">
         <div className="section-topline">
           <h2>{selectedCategory ? `背景图库 · ${formatCategoryLabel(selectedCategory)}` : '背景图库'}</h2>
           <div className="topbar-actions">
+            <button
+              className="ghost-pill icon-pill"
+              type="button"
+              onClick={handleUploadClick}
+              aria-label="上传背景图"
+              title="上传背景图"
+            >
+              <PlusIcon />
+            </button>
             <button className={`ghost-pill ${selectedCategoryId ? 'active' : ''}`} type="button" onClick={() => setCategoryPickerOpen(open => !open)}>
               类型
             </button>
