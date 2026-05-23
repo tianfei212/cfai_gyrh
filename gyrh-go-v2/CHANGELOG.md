@@ -10,7 +10,7 @@
 - 分支：`feature/qwen-active-skill-template`
 - 目的：修复 `pshow` 用户登录后点击退出按钮未真正执行退出流程的问题。
 - 执行者：GPT-5.5（OpenAI）
-- commit hash：本条记录随本次提交生成。
+- commit hash：`3767127`
 
 ### 修改内容
 
@@ -28,7 +28,7 @@
 - 分支：`feature/qwen-active-skill-template`
 - 目的：新增前端 JWT 登录、角色鉴权、登录审计日志，并生成主工作区 macOS release 目录用于测试。
 - 执行者：GPT-5.5（OpenAI）
-- commit hash：本条记录随本次提交生成。
+- commit hash：`3059796`，补充发布包 `manage.sh` 与主工作区 release 说明见 `04575e1`。
 
 ### 修改内容
 
@@ -59,7 +59,7 @@
 - 分支：`feature/qwen-active-skill-template`
 - 目的：新增 Windows 展厅 kiosk 壳子，调用本机已安装 Google Chrome 全屏打开配置 URL。
 - 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
-- commit hash：本条记录随本次提交生成。
+- commit hash：`3059796`
 
 ### 修改内容
 
