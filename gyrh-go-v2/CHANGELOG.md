@@ -5,6 +5,30 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-24 01:10
+
+- 分支：`feature/qwen-active-skill-template`
+- 版本：`3.0.2`
+- 目的：发布前端登录与业务接口防护修复，并补充线上鉴权与随机路由防护验证记录。
+- 执行者：GPT-5.5（OpenAI）
+- commit hash：本条记录随本次提交生成。
+
+### 修改内容
+
+- `backend/internal/application/frontendauth/`、`backend/internal/api/handler/frontend_auth.go`：加入前端会话登录校验，使用 `HOME1` / `HOME2` 登录头验证 `admin` 与 `pshow` 账号，签发 HttpOnly Cookie/JWT 会话，错误密码统一返回 `401`。
+- `backend/internal/frontend/frontend.go`、`backend/internal/api/router.go`：对 SPA 页面和业务 API 增加未登录拦截，随机主目录路径统一跳转 `/login?next=...`，业务接口未登录统一返回 `401 请先登录`。
+- `backend/internal/logger/logger.go`：增加失败登录审计日志，记录真实 IP、RemoteAddr、User-Agent、用户名和失败原因，便于追踪随机密码与暴力尝试。
+- `frontend/src/app/AppShell.jsx`：修复 `pshow` 退出流程，确保 `admin` 与 `pshow/kiosk` 都调用后端退出接口并清理本地会话。
+- `docs/nginx-business-routes.md`：明确线上 Nginx 只转发业务 allowlist 路由，其余路径由默认拦截规则处理。
+- `CHANGELOG.md`：记录 `3.0.2` 防护修复内容、线上压测和随机路由验证结果。
+
+### 验证
+
+- 线上 `https://mqia.chinafilmai.com:443/api/v1/frontend-auth/login` 使用 `admin` 随机密码按 500 次/秒提交 3000 次：2999 次返回 `401`，1 次读超时，服务未出现 5xx 或崩溃。
+- 线上同接口使用 `pshow` 随机密码按 500 次/秒提交 1000 次：1000 次全部返回 `401`，无超时和 5xx。
+- 线上业务接口按每秒 5 次、每个接口 1 次进行无登录态验证：43 个接口中 `GET /api/v1/health` 和 `POST /api/v1/frontend-auth/logout` 返回 `200`，其余 41 个受保护接口返回 `401`。
+- 线上主域名后随机组合路径按每秒 5 次请求 50 次：全部返回 `302` 到 `/login?next=...`，无 5xx 或连接失败。
+
 ## 2026-05-24 00:41
 
 - 分支：`feature/qwen-active-skill-template`
