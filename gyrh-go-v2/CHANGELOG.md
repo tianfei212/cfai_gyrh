@@ -5,6 +5,33 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-23 21:47
+
+- 分支：`main`
+- 目的：优化工作台背景图库布局，移除占用纵向空间的上传区域，将上传入口合并到图库工具栏。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`1a5a0a0`
+
+### 说明
+
+- 删除工作台顶部“快速选择场景/上传背景图”整块区域，不再占用背景图库上方空间。
+- 将本地背景上传 `+` 图标移动到“类型”按钮左侧，作为同一排工具按钮。
+- 本地上传图片选择后直接进入使用流程，不再额外展示 HUD、预览条或二次确认区域。
+- 背景图库每页加载数量从 6 调整为 9，三列布局下默认可展示三行。
+- 清理旧上传区域、HUD 使用按钮和拖拽上传相关的死样式/状态。
+
+### 修改文件
+
+- `frontend/src/screens/DashboardScreen.jsx`：移除大上传区和 HUD 上传区域，新增工具栏上传按钮，并调整默认分页数量。
+- `frontend/src/styles.css`：移除旧上传区/HUD 样式，扩大背景图库展示区域。
+
+### 验证
+
+- 前端单元测试通过：`npm test`，45/45 通过。
+- 前端生产构建通过：`npm run build -- --outDir ../backend/internal/frontend/dist --emptyOutDir`。
+- linter 检查通过，触达文件无诊断错误。
+- 已用 `go run` 重启本地测试服务并启动 OSS；当前前端入口为 `/assets/index-C7nSfzus.js` 与 `/assets/index-CCuyFSrd.css`。
+
 ## 2026-05-23 00:08
 
 - 分支：`main`
