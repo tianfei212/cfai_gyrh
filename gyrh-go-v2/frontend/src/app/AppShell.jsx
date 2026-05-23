@@ -13,6 +13,7 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { LogoutScreen } from '../screens/LogoutScreen';
 import { useBrandingConfig } from '../config/branding';
 import { fetchApi } from '../services/api';
+import { logoutFrontend } from '../services/frontendAuth';
 import { createBackgroundCache } from '../utils/backgroundCache';
 import { buildBackgroundPromptListUrl } from '../utils/backgroundPagination';
 import { prefetchSelfieSegmentationAssets } from '../utils/mediapipeAssets';
@@ -76,7 +77,10 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
   };
   const logout = () => changeScreen(mode === 'kiosk' ? 'dashboard' : 'logout');
 
-  const goLogin = () => changeScreen('login');
+  const goLogin = async () => {
+    await logoutFrontend();
+    window.location.replace('/login');
+  };
 
   const navHandlers = {
     onHome: goHome,

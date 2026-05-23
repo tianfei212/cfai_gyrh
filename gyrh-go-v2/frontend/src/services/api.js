@@ -36,13 +36,22 @@ export async function getAuthHeaders() {
   return signRequest(clientIP, publicKey, privateKey);
 }
 
+export function buildFrontendAuthHeader(session) {
+  if (!session?.token) return {};
+  return {
+    Authorization: `Bearer ${session.token}`,
+  };
+}
+
 export async function fetchApi(url, options = {}) {
   // In a real app, you might want to get the client IP or let a gateway handle it
   const authHeaders = await getAuthHeaders();
+  const frontendAuthHeaders = buildFrontendAuthHeader(getStoredFrontendSessionSafe());
 
   const headers = {
     'Content-Type': 'application/json',
     ...authHeaders,
+    ...frontendAuthHeaders,
     ...options.headers,
   };
 
@@ -83,5 +92,14 @@ export async function fetchApi(url, options = {}) {
   } catch (error) {
     console.error(`[API Failed] ${method} ${url}`, error);
     throw error;
+  }
+}
+
+function getStoredFrontendSessionSafe() {
+  try {
+    const raw = globalThis.localStorage?.getItem('gyrh_frontend_session');
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
   }
 }

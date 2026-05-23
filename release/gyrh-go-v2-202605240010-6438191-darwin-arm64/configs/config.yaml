@@ -1,0 +1,55 @@
+server:
+  port: 9913
+  read_timeout: 300
+  write_timeout: 300
+
+matting:
+  enabled: true
+  model: mediapipe
+  model_path: ./backend/models/mediapipe/selfie_segmentation_landscape.tflite
+  server_url: http://127.0.0.1:5000
+
+storage:
+  mode: oss
+  local_path: ./backend/data/generated
+
+skill:
+  use_database: true
+  local_path: ./configs/skills
+  import_trigger_file: ./configs/SKILL导入
+  watch_interval_seconds: 5
+
+models:
+  gemini: gemini-3.1-flash-image-preview
+  wan: wan2.7-image-pro
+  qwen: qwen3.6-plus
+  http_timeout_minutes: 20
+
+alioss:
+  enabled: true
+  auto_start: false
+  binary_path: ./bin/oss-cli
+  health_wait_seconds: 15
+
+helpper302:
+  enabled: true
+  base_url: https://api.302.ai
+  provider: 302-gpt-image
+  model_name: gpt-image-2
+  mode: async
+  poll_interval_seconds: 2
+  max_wait_seconds: 300
+
+import:
+  enabled: true
+  generated_dir: ./backend/data/generated_import
+  watch_interval_seconds: 10
+
+# 背景管理「同步」使用的远端图库接口完整 URL（须含 path/query）；也可在请求体传 api_url 覆盖
+gallery:
+  external_url: http://localhost:9913
+
+logger:
+  level: debug
+  path: ./logs/app
+  max_age: 30

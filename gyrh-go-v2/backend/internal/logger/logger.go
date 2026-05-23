@@ -207,6 +207,33 @@ func (l *Logger) output(level Level, msg string) {
 	}
 }
 
+func (l *Logger) loginError(realIP, username, remoteAddr, userAgent string, err error) {
+	if err := os.MkdirAll(l.config.Directory, 0755); err != nil {
+		fmt.Printf("创建登录失败日志目录失败: %v\n", err)
+		return
+	}
+	message := fmt.Sprintf("[%s] [LOGIN_ERROR] real_ip=%s username=%q remote_addr=%s user_agent=%q error=%q\n",
+		formatTime(time.Now()),
+		realIP,
+		username,
+		remoteAddr,
+		userAgent,
+		err,
+	)
+	path := filepath.Join(l.config.Directory, "login_error.log")
+	l.fileMu.Lock()
+	defer l.fileMu.Unlock()
+	file, openErr := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if openErr != nil {
+		fmt.Printf("打开登录失败日志文件失败: %v\n", openErr)
+		return
+	}
+	defer file.Close()
+	if _, writeErr := file.WriteString(message); writeErr != nil {
+		fmt.Printf("写入登录失败日志文件失败: %v\n", writeErr)
+	}
+}
+
 // 切割日志文件 (调用此方法前必须持有 l.fileMu 锁)
 func (l *Logger) rotateFile() {
 	if l.file != nil {
@@ -248,6 +275,13 @@ func Warn(format string, args ...interface{}) {
 		Init(Config{Level: DebugLevel})
 	}
 	defaultLogger.output(WarnLevel, fmt.Sprintf(format, args...))
+}
+
+func LoginError(realIP, username, remoteAddr, userAgent string, err error) {
+	if defaultLogger == nil {
+		Init(Config{Level: DebugLevel})
+	}
+	defaultLogger.loginError(realIP, username, remoteAddr, userAgent, err)
 }
 
 // Error 输出错误日志

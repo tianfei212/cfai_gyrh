@@ -1,0 +1,10 @@
+oss:
+  endpoint: "https://oss-cn-beijing.aliyuncs.com"
+  bucket_name: "your_bucket_name_here"
+  bucket_prefix: "images_data/"
+  generated_bucket_prefix: "gyrh_images_data/"
+
+server:
+  port: 18080
+  link_expire_seconds: 3600
+  openai_api_key: "your_openai_api_key_here"

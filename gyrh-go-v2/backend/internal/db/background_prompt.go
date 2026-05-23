@@ -172,14 +172,14 @@ func (r *BackgroundPromptRepo) List(limit, offset int) ([]*BackgroundPrompt, err
 		rows, err = r.db.Query(`
 			SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, gpt_prompt, gpt_negative_prompt, gpt_prompt_zh, gpt_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
 			FROM background_prompts
-			ORDER BY name DESC, id DESC
+			ORDER BY name ASC
 			LIMIT ? OFFSET ?
 		`, limit, offset)
 	} else {
 		rows, err = r.db.Query(`
 			SELECT id, name, gemini_prompt, gemini_negative_prompt, gemini_prompt_zh, gemini_negative_prompt_zh, wan_prompt, wan_negative_prompt, wan_prompt_zh, wan_negative_prompt_zh, gpt_prompt, gpt_negative_prompt, gpt_prompt_zh, gpt_negative_prompt_zh, image_asset_id, image_url, image_width, image_height, created_at, updated_at
 			FROM background_prompts
-			ORDER BY name DESC, id DESC
+			ORDER BY name ASC
 		`)
 	}
 	if err != nil {

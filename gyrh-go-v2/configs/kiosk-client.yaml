@@ -1,0 +1,21 @@
+# GYRH Windows kiosk client configuration.
+# The client launches the Google Chrome installed on Windows in full-screen kiosk mode.
+
+url: "http://127.0.0.1:9913/admin_viewer"
+
+# Leave empty to auto-detect Google Chrome from standard Windows install locations.
+chrome_path: ""
+
+# Isolated Chrome profile used only by the kiosk client.
+user_data_dir: "runtime/chrome-profile"
+
+# Re-open Chrome if it exits unexpectedly.
+auto_restart: true
+restart_delay_seconds: 3
+
+# When the launcher exits, also close the Chrome process it started.
+close_chrome_on_exit: true
+
+# Optional extra Chrome flags. Keep empty unless a deployment machine needs them.
+additional_chrome_flags: []
+

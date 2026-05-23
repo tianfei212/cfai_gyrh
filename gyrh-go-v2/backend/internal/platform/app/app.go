@@ -16,6 +16,7 @@ import (
 	"gyrh-go-v2/backend/internal/api"
 	"gyrh-go-v2/backend/internal/api/handler"
 	"gyrh-go-v2/backend/internal/api/middleware"
+	frontendauthapp "gyrh-go-v2/backend/internal/application/frontendauth"
 	"gyrh-go-v2/backend/internal/bootstrap"
 	"gyrh-go-v2/backend/internal/config"
 	"gyrh-go-v2/backend/internal/core/llm"
@@ -30,6 +31,10 @@ import (
 // Run 加载配置、初始化依赖并启动 HTTP 服务。
 // 该函数是后端服务的组合根，负责把配置、数据库、存储、模型、Handler 和路由串联起来。
 func Run(ctx context.Context) error {
+	rootDir, err := config.FindProjectRoot()
+	if err != nil {
+		return fmt.Errorf("查找项目根目录失败: %w", err)
+	}
 	cfg, err := config.Load(config.GetConfigPath())
 	if err != nil {
 		return fmt.Errorf("加载配置失败: %w", err)
@@ -102,13 +107,15 @@ func Run(ctx context.Context) error {
 
 	imageHandler := handler.NewImageHandler(imageRepo, backgroundPromptRepo, stylePromptRepo, storageService, llmService, rewriteTaskRepo)
 	referenceHandler := handler.NewReferenceHandler(referenceRepo, storageService)
-	skillHandler := handler.NewSkillHandler(skillRepo)
+	skillHandler := handler.NewSkillHandler(skillRepo, llmPromptTemplateRepo)
 	llmPromptTemplateHandler := handler.NewLLMPromptTemplateHandler(llmPromptTemplateRepo)
 	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor, cfg.Gallery.ExternalURL)
 	stylePromptHandler := handler.NewStylePromptHandler(stylePromptRepo)
+	frontendAuthService := frontendauthapp.NewService(cfg.FrontendAuth, rootDir)
+	frontendAuthHandler := handler.NewFrontendAuthHandler(frontendAuthService)
 
 	router := mux.NewRouter()
-	api.RegisterRoutes(router, imageHandler, referenceHandler, skillHandler, llmPromptTemplateHandler, backgroundPromptHandler, stylePromptHandler, &middleware.AuthConfig{
+	api.RegisterRoutes(router, imageHandler, referenceHandler, skillHandler, llmPromptTemplateHandler, backgroundPromptHandler, stylePromptHandler, frontendAuthHandler, &middleware.AuthConfig{
 		PrivateKeyFetcher: func(publicKey string) string {
 			if configuredPublicKey := os.Getenv("GYRH_AUTH_PUBLIC_KEY"); configuredPublicKey != "" && configuredPublicKey == publicKey {
 				return os.Getenv("GYRH_AUTH_PRIVATE_KEY")
@@ -117,7 +124,7 @@ func Run(ctx context.Context) error {
 			return os.Getenv(envKey)
 		},
 	})
-	router.PathPrefix("/").Handler(frontend.Handler())
+	router.PathPrefix("/").Handler(frontend.HandlerWithAuth(frontendAuthHandler))
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),

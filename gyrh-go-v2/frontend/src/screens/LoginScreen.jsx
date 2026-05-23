@@ -1,28 +1,65 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CenteredStage } from '../components/Layout';
+import { loginFrontend } from '../services/frontendAuth';
 
-export function LoginScreen({ onHome }) {
+export function LoginScreen({ onHome, onLoginSuccess }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+    try {
+      const session = await loginFrontend(username.trim(), password);
+      if (onLoginSuccess) {
+        onLoginSuccess(session);
+      } else {
+        onHome();
+      }
+    } catch (err) {
+      setError(err.message || '登录失败');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <CenteredStage>
-      <div className="auth-card">
+      <form className="auth-card" autoComplete="off" onSubmit={handleSubmit}>
         <div className="avatar-mark" />
         <h1>欢迎登录</h1>
-        <p>使用账号继续你的创作流程</p>
+        <p>请输入账号和密码继续访问系统</p>
         <label className="field-block">
           <span>账号</span>
-          <input placeholder="请输入手机号 / 邮箱" />
+          <input
+            autoComplete="off"
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder="请输入账号"
+            name="gyrh-login-user"
+            spellCheck="false"
+            value={username}
+          />
         </label>
         <label className="field-block">
           <span>密码</span>
-          <input placeholder="请输入密码" type="password" />
+          <input
+            autoComplete="new-password"
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="请输入密码"
+            name="gyrh-login-pass"
+            type="password"
+            value={password}
+          />
         </label>
-        <div className="helper-row">
-          <span>记住我</span>
-          <span>忘记密码?</span>
-        </div>
-        <button className="auth-submit" type="button" onClick={onHome}>登录</button>
-        <p className="auth-footnote">没有账号？立即注册</p>
-      </div>
+        {error ? <p className="auth-error">{error}</p> : null}
+        <button className="auth-submit" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? '登录中...' : '登录'}
+        </button>
+        <p className="auth-footnote">账号信息由管理员统一管理</p>
+      </form>
     </CenteredStage>
   );
 }

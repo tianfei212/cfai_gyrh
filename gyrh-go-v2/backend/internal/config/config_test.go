@@ -43,3 +43,42 @@ func TestApplyEnvOverridesHelpper302(t *testing.T) {
 		t.Fatalf("MaxWaitSeconds = %d, want 12", cfg.Helpper302.MaxWaitSeconds)
 	}
 }
+
+func TestApplyEnvOverridesFrontendAuth(t *testing.T) {
+	t.Setenv("GYRH_FRONTEND_AUTH_JWT_SECRET", "test-secret")
+	t.Setenv("GYRH_FRONTEND_AUTH_TOKEN_TTL_MINUTES", "15")
+	t.Setenv("GYRH_FRONTEND_AUTH_ADMIN_USERNAME", "admin")
+	t.Setenv("GYRH_FRONTEND_AUTH_ADMIN_PASSWORD", "1234@#")
+	t.Setenv("GYRH_FRONTEND_AUTH_PSHOW_USERNAME", "pshow")
+	t.Setenv("GYRH_FRONTEND_AUTH_PSHOW_PASSWORD", "a1B2@#")
+
+	cfg := DefaultConfig()
+	if err := applyEnvOverrides(cfg); err != nil {
+		t.Fatalf("applyEnvOverrides returned error: %v", err)
+	}
+	if cfg.FrontendAuth.JWTSecret != "test-secret" {
+		t.Fatalf("JWTSecret = %q", cfg.FrontendAuth.JWTSecret)
+	}
+	if cfg.FrontendAuth.TokenTTLMinutes != 15 {
+		t.Fatalf("TokenTTLMinutes = %d, want 15", cfg.FrontendAuth.TokenTTLMinutes)
+	}
+	if len(cfg.FrontendAuth.Users) != 2 {
+		t.Fatalf("users len = %d, want 2", len(cfg.FrontendAuth.Users))
+	}
+	if cfg.FrontendAuth.Users[0].Username != "admin" || cfg.FrontendAuth.Users[0].Role != "admin" {
+		t.Fatalf("admin user = %+v", cfg.FrontendAuth.Users[0])
+	}
+	if cfg.FrontendAuth.Users[1].Username != "pshow" || cfg.FrontendAuth.Users[1].Role != "pshow" {
+		t.Fatalf("pshow user = %+v", cfg.FrontendAuth.Users[1])
+	}
+}
+
+func TestApplyEnvOverridesFrontendAuthRejectsWeakPassword(t *testing.T) {
+	t.Setenv("GYRH_FRONTEND_AUTH_ADMIN_USERNAME", "admin")
+	t.Setenv("GYRH_FRONTEND_AUTH_ADMIN_PASSWORD", "123456")
+
+	cfg := DefaultConfig()
+	if err := applyEnvOverrides(cfg); err == nil {
+		t.Fatal("applyEnvOverrides should reject password without two special characters")
+	}
+}

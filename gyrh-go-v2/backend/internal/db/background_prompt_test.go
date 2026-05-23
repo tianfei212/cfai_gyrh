@@ -2,7 +2,7 @@ package db
 
 import "testing"
 
-func TestBackgroundPromptRepoListOrdersByNameDesc(t *testing.T) {
+func TestBackgroundPromptRepoListOrdersByNameAscOnly(t *testing.T) {
 	database, err := NewDB(t.TempDir() + "/gyrh.db")
 	if err != nil {
 		t.Fatalf("create db: %v", err)
@@ -28,7 +28,7 @@ func TestBackgroundPromptRepoListOrdersByNameDesc(t *testing.T) {
 	}
 
 	got := []string{items[0].Name, items[1].Name}
-	want := []string{"C 场景", "B 场景"}
+	want := []string{"A 场景", "B 场景"}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("item %d name = %q, want %q; got all %v", i, got[i], want[i], got)

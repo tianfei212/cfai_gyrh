@@ -5,6 +5,82 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-24 00:33
+
+- 分支：`feature/qwen-active-skill-template`
+- 目的：新增前端 JWT 登录、角色鉴权、登录审计日志，并生成主工作区 macOS release 目录用于测试。
+- 执行者：GPT-5.5（OpenAI）
+- commit hash：本条记录随本次提交生成。
+
+### 修改内容
+
+- `backend/internal/application/frontendauth/`：新增前端登录应用服务，负责 JWT 签发/校验、HttpOnly Cookie 会话、`.env.local` 热加载、角色信息和真实 IP 解析。
+- `backend/internal/api/handler/frontend_auth.go`：新增 `HOME1` / `HOME2` 登录接口、会话接口、退出接口和 API 会话中间件；登录成功/失败均记录详细审计日志。
+- `backend/internal/logger/logger.go`：新增 `login_error.log` 专用失败登录审计文件，记录失败时间、真实 IP、用户名、RemoteAddr、User-Agent 和失败原因。
+- `backend/internal/frontend/frontend.go` 与 `backend/internal/api/router.go`：对 SPA 页面和业务 API 增加前端会话鉴权，未登录强制跳转 `/login` 或返回 `401`。
+- `frontend/src/services/frontendAuth.js`、`frontend/src/app/routes.jsx`、`frontend/src/screens/LoginScreen.jsx`：新增前端登录页、角色跳转、退出清理、前端 token 请求头和禁止保存密码的表单处理。
+- `docs/nginx-business-routes.md`：整理 Nginx 业务路由 allowlist，便于只转发业务路由。
+- `docs/backend-package-reorganization-plan.md`：记录后端按功能包继续拆分的阶段计划，当前已先拆出前端认证服务。
+- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/`：生成主工作区 macOS arm64 测试 release 目录，包含 `gyrh-server`、`oss-cli`、OSS 配置和发布管理脚本，不生成 `.tar.gz`。
+
+### 验证
+
+- `go test -race ./internal/logger ./internal/application/frontendauth ./internal/api/handler ./internal/frontend` 通过。
+- release 目录下 `./manage.sh restart` 已验证后端/内嵌前端 `9913`、OSS 背景素材 `18080`、OSS 生成素材 `18081` 均可启动。
+- 未登录访问 `/` 返回 `302` 到 `/login?next=/`。
+- 错误密码登录返回 `401`，并确认 `logs/app/login_error.log` 写入真实 IP。
+- 登录页文案已去除 `.env.local` 暴露，仅显示面向用户的账号密码提示。
+
+## 2026-05-23 16:50
+
+- 分支：`feature/qwen-active-skill-template`
+- 目的：新增 Windows 展厅 kiosk 壳子，调用本机已安装 Google Chrome 全屏打开配置 URL。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：本条记录随本次提交生成。
+
+### 修改内容
+
+- `backend/cmd/kiosk-client/main.go`：新增 kiosk client 独立入口，支持 `-config` 指定配置文件。
+- `backend/internal/kiosk/`：新增配置加载、Chrome 自动查找、kiosk 启动参数生成和 Chrome 进程守护逻辑。
+- `configs/kiosk-client.yaml`：新增 Windows kiosk client 配置模板，默认 URL 为 `http://127.0.0.1:9913/admin_viewer`，`chrome_path` 为空时自动查找 Chrome。
+- `scripts/build_kiosk_client_windows.sh`：新增 Windows amd64 壳子构建和 zip 打包脚本。
+- `CHANGELOG.md`：记录本次 kiosk 壳子实现和验证结果。
+
+### 验证
+
+- `go test ./internal/kiosk` 通过。
+- `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o /tmp/gyrh-kiosk-client.exe ./cmd/kiosk-client` 通过。
+- linter 检查触达 Go 文件无诊断错误。
+- 已生成 Windows amd64 kiosk client 包：`release/gyrh-kiosk-client-202605231650-6438191-windows-amd64.zip`。
+
+## 2026-05-22 21:37
+
+- 分支：`feature/fullscreen-responsive-adaptation`
+- 目的：按用户要求调整主界面背景图库排序为名称升序，并重新生成 Ubuntu amd64 release 包。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：本条记录随本次提交生成。
+
+### 修改内容
+
+- `backend/internal/db/background_prompt.go`：背景图提示词列表 SQL 从 `ORDER BY name DESC` 改为 `ORDER BY name ASC`，分页和非分页查询保持一致。
+- `backend/internal/db/background_prompt_test.go`：同步更新 DB 层排序回归测试，验证列表按名称升序返回。
+- `CHANGELOG.md`：记录本次排序调整、验证结果和 release 产物。
+
+### 验证
+
+- `go test ./internal/db` 通过。
+- linter 检查触达 Go 文件无诊断错误。
+- 已重启本地后端，`9913` 正在监听；前端服务仍在 `9912` 监听。
+- 手动执行数据库查询确认升序结果：`SELECT id, name FROM background_prompts ORDER BY name ASC LIMIT 10 OFFSET 0;`，其中 `a_战场` 位于数字和 `IMG_...` 名称之后。
+
+### Release
+
+- 重新生成 Ubuntu amd64 release：`release/gyrh-go-v2-202605222137-6438191-ubuntu-amd64.tar.gz`。
+- Ubuntu 单文件更新目标：`release/gyrh-go-v2-202605222137-6438191-ubuntu-amd64/bin/gyrh-server`。
+- `bin/gyrh-server` 验证为 Linux x86-64 ELF，大小约 `27M`。
+- Ubuntu `bin/gyrh-server` SHA256：`3c54cc4d49496b17c3df91b82075d859c6a66c56d00df691f90afef8c2f2de5d`。
+- 本次记录不包含 `backend/data/gyrh.db*`、`release/` 等运行和打包产物提交。
+
 ## 2026-05-22 17:08
 
 - 分支：`feature/fullscreen-responsive-adaptation`

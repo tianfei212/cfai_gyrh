@@ -1865,6 +1865,18 @@ textarea {
   min-width: 9.5rem;
 }
 
+.auth-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.auth-error {
+  margin: 0.75rem 0 0;
+  color: #fecaca;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .auth-footnote {
   margin: 0.9rem 0 0;
 }

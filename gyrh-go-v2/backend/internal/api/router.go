@@ -21,6 +21,7 @@ func RegisterRoutes(
 	llmPromptTemplateHandler *handler.LLMPromptTemplateHandler,
 	backgroundPromptHandler *handler.BackgroundPromptHandler,
 	stylePromptHandler *handler.StylePromptHandler,
+	frontendAuthHandler *handler.FrontendAuthHandler,
 	authConfig *middleware.AuthConfig,
 ) {
 	router.Use(middleware.Logger())
@@ -28,15 +29,22 @@ func RegisterRoutes(
 
 	api := router.PathPrefix("/api/v1").Subrouter()
 	api.HandleFunc("/health", healthCheck).Methods(http.MethodGet)
-	api.HandleFunc("/skills/active", skillHandler.GetActive).Methods(http.MethodGet)
-	api.HandleFunc("/style-prompts", stylePromptHandler.List).Methods(http.MethodGet)
+	api.HandleFunc("/frontend-auth/login", frontendAuthHandler.Login).Methods(http.MethodPost)
+	api.HandleFunc("/frontend-auth/session", frontendAuthHandler.Session).Methods(http.MethodGet)
+	api.HandleFunc("/frontend-auth/logout", frontendAuthHandler.Logout).Methods(http.MethodPost)
 
-	// 公开的图片资源访问接口，不需要 Header 鉴权，因为常用于 <img> 标签
-	api.Handle("/images/thumbnail", adaptErr(imageHandler.Thumbnail)).Methods(http.MethodGet)
-	api.Handle("/images/download", adaptErr(imageHandler.Download)).Methods(http.MethodGet)
-	api.Handle("/images/view", adaptErr(imageHandler.View)).Methods(http.MethodGet)
+	sessionAPI := api.NewRoute().Subrouter()
+	sessionAPI.Use(frontendAuthHandler.RequireSession)
+	sessionAPI.HandleFunc("/skills/active", skillHandler.GetActive).Methods(http.MethodGet)
+	sessionAPI.HandleFunc("/style-prompts", stylePromptHandler.List).Methods(http.MethodGet)
+
+	// 图片资源常用于 <img> 标签，不能依赖自定义 Header，但必须有前端登录 Cookie。
+	sessionAPI.Handle("/images/thumbnail", adaptErr(imageHandler.Thumbnail)).Methods(http.MethodGet)
+	sessionAPI.Handle("/images/download", adaptErr(imageHandler.Download)).Methods(http.MethodGet)
+	sessionAPI.Handle("/images/view", adaptErr(imageHandler.View)).Methods(http.MethodGet)
 
 	protected := api.NewRoute().Subrouter()
+	protected.Use(frontendAuthHandler.RequireSession)
 	protected.Use(middleware.Auth(authConfig))
 
 	protected.Handle("/images", adaptErr(imageHandler.List)).Methods(http.MethodGet)

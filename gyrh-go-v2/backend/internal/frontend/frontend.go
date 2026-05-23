@@ -13,8 +13,16 @@ var embedded embed.FS
 
 const immutableCacheControl = "public, max-age=31536000, immutable"
 
+type AuthGuard interface {
+	HasValidSession(r *http.Request) bool
+}
+
 // Handler serves the embedded React app and falls back to index.html for SPA routes.
 func Handler() http.Handler {
+	return HandlerWithAuth(nil)
+}
+
+func HandlerWithAuth(auth AuthGuard) http.Handler {
 	dist, err := fs.Sub(embedded, "dist")
 	if err != nil {
 		return http.NotFoundHandler()
@@ -24,6 +32,11 @@ func Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.NotFound(w, r)
+			return
+		}
+		if requiresLogin(r.URL.Path) && auth != nil && !auth.HasValidSession(r) {
+			target := "/login?next=" + r.URL.RequestURI()
+			http.Redirect(w, r, target, http.StatusFound)
 			return
 		}
 
@@ -53,6 +66,20 @@ func Handler() http.Handler {
 		}
 		_, _ = w.Write(index)
 	})
+}
+
+func requiresLogin(requestPath string) bool {
+	if requestPath == "" || requestPath == "/" {
+		return true
+	}
+	cleanPath := path.Clean("/" + requestPath)
+	if cleanPath == "/login" || strings.HasPrefix(cleanPath, "/assets/") {
+		return false
+	}
+	if isStaticAssetRequest(strings.TrimPrefix(cleanPath, "/")) {
+		return false
+	}
+	return true
 }
 
 func isImmutableAsset(name string) bool {

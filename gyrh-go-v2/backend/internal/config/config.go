@@ -12,16 +12,17 @@ import (
 
 // Config 全局配置结构体。
 type Config struct {
-	Server     ServerConfig     `yaml:"server"`
-	Matting    MattingConfig    `yaml:"matting"`
-	Storage    StorageConfig    `yaml:"storage"`
-	Skill      SkillConfig      `yaml:"skill"`
-	Models     ModelConfig      `yaml:"models"`
-	AliOSS     AliOSSConfig     `yaml:"alioss"`
-	Helpper302 Helpper302Config `yaml:"helpper302"`
-	Import     ImportConfig     `yaml:"import"`
-	Gallery    GalleryConfig    `yaml:"gallery"`
-	Logger     LoggerConfig     `yaml:"logger"`
+	Server       ServerConfig       `yaml:"server"`
+	Matting      MattingConfig      `yaml:"matting"`
+	Storage      StorageConfig      `yaml:"storage"`
+	Skill        SkillConfig        `yaml:"skill"`
+	Models       ModelConfig        `yaml:"models"`
+	AliOSS       AliOSSConfig       `yaml:"alioss"`
+	Helpper302   Helpper302Config   `yaml:"helpper302"`
+	Import       ImportConfig       `yaml:"import"`
+	Gallery      GalleryConfig      `yaml:"gallery"`
+	Logger       LoggerConfig       `yaml:"logger"`
+	FrontendAuth FrontendAuthConfig `yaml:"-"`
 }
 
 // ServerConfig HTTP 服务配置。
@@ -109,6 +110,20 @@ type LoggerConfig struct {
 	MaxAge int    `yaml:"max_age"`
 }
 
+// FrontendAuthConfig 前端页面登录配置，仅从环境变量/.env.local 读取。
+type FrontendAuthConfig struct {
+	JWTSecret       string
+	TokenTTLMinutes int
+	Users           []FrontendUserConfig
+}
+
+// FrontendUserConfig 前端页面登录用户。
+type FrontendUserConfig struct {
+	Username string
+	Password string
+	Role     string
+}
+
 // DefaultConfig 返回默认配置。
 func DefaultConfig() *Config {
 	return &Config{
@@ -171,6 +186,9 @@ func DefaultConfig() *Config {
 			Level:  "info",
 			Path:   "./backend/logs",
 			MaxAge: 30,
+		},
+		FrontendAuth: FrontendAuthConfig{
+			TokenTTLMinutes: 480,
 		},
 	}
 }
@@ -456,15 +474,104 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.Logger.MaxAge = value
 	}
 
-	return nil
-}
-
-func loadDotEnv(path string) error {
-	data, err := os.ReadFile(path)
+	frontendAuth, err := FrontendAuthFromValues(envValuesFromOS())
 	if err != nil {
 		return err
 	}
+	if frontendAuth.JWTSecret != "" {
+		cfg.FrontendAuth.JWTSecret = frontendAuth.JWTSecret
+	}
+	if frontendAuth.TokenTTLMinutes > 0 {
+		cfg.FrontendAuth.TokenTTLMinutes = frontendAuth.TokenTTLMinutes
+	}
+	cfg.FrontendAuth.Users = frontendAuth.Users
 
+	return nil
+}
+
+func ApplyEnvOverrides(cfg *Config) error {
+	return applyEnvOverrides(cfg)
+}
+
+func FrontendAuthFromValues(values map[string]string) (FrontendAuthConfig, error) {
+	cfg := FrontendAuthConfig{
+		JWTSecret:       values["GYRH_FRONTEND_AUTH_JWT_SECRET"],
+		TokenTTLMinutes: 480,
+	}
+	if v := values["GYRH_FRONTEND_AUTH_TOKEN_TTL_MINUTES"]; v != "" {
+		value, err := strconv.Atoi(v)
+		if err != nil {
+			return cfg, fmt.Errorf("GYRH_FRONTEND_AUTH_TOKEN_TTL_MINUTES 无效: %s", v)
+		}
+		cfg.TokenTTLMinutes = value
+	}
+	adminUsername := firstValue(values, "GYRH_FRONTEND_AUTH_ADMIN_USERNAME", "ADMIN_USERNAME")
+	adminPassword := firstValue(values, "GYRH_FRONTEND_AUTH_ADMIN_PASSWORD", "ADMIN_PASSWORD")
+	pshowUsername := firstValue(values, "GYRH_FRONTEND_AUTH_PSHOW_USERNAME")
+	pshowPassword := firstValue(values, "GYRH_FRONTEND_AUTH_PSHOW_PASSWORD")
+	users, err := buildFrontendAuthUsers(adminUsername, adminPassword, pshowUsername, pshowPassword)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.Users = users
+	return cfg, nil
+}
+
+func buildFrontendAuthUsers(adminUsername, adminPassword, pshowUsername, pshowPassword string) ([]FrontendUserConfig, error) {
+	users := make([]FrontendUserConfig, 0, 2)
+	if adminUsername != "" && adminPassword != "" {
+		if err := validateFrontendPassword("admin", adminPassword); err != nil {
+			return nil, err
+		}
+		users = append(users, FrontendUserConfig{
+			Username: adminUsername,
+			Password: adminPassword,
+			Role:     "admin",
+		})
+	}
+	if pshowUsername != "" && pshowPassword != "" {
+		if err := validateFrontendPassword("pshow", pshowPassword); err != nil {
+			return nil, err
+		}
+		users = append(users, FrontendUserConfig{
+			Username: pshowUsername,
+			Password: pshowPassword,
+			Role:     "pshow",
+		})
+	}
+	return users, nil
+}
+
+func validateFrontendPassword(role, password string) error {
+	specialCount := 0
+	for _, ch := range password {
+		if (ch < '0' || ch > '9') && (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') {
+			specialCount++
+		}
+	}
+	if specialCount < 2 {
+		return fmt.Errorf("GYRH_FRONTEND_AUTH_%s_PASSWORD 必须至少包含 2 位特殊字符", strings.ToUpper(role))
+	}
+	return nil
+}
+
+func LoadDotEnvFile(path string) error {
+	values, err := LoadDotEnvValues(path)
+	if err != nil {
+		return err
+	}
+	for key, value := range values {
+		_ = os.Setenv(key, value)
+	}
+	return nil
+}
+
+func LoadDotEnvValues(path string) (map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	values := make(map[string]string)
 	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -482,11 +589,13 @@ func loadDotEnv(path string) error {
 		if key == "" {
 			continue
 		}
-		if _, exists := os.LookupEnv(key); !exists {
-			_ = os.Setenv(key, value)
-		}
+		values[key] = value
 	}
-	return nil
+	return values, nil
+}
+
+func loadDotEnv(path string) error {
+	return LoadDotEnvFile(path)
 }
 
 func firstEnv(keys ...string) string {
@@ -496,6 +605,26 @@ func firstEnv(keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func firstValue(values map[string]string, keys ...string) string {
+	for _, key := range keys {
+		if value := values[key]; value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func envValuesFromOS() map[string]string {
+	values := make(map[string]string)
+	for _, item := range os.Environ() {
+		parts := strings.SplitN(item, "=", 2)
+		if len(parts) == 2 {
+			values[parts[0]] = parts[1]
+		}
+	}
+	return values
 }
 
 func validateConfig(cfg *Config) error {

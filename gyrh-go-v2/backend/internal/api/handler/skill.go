@@ -12,12 +12,16 @@ import (
 
 // SkillHandler 提供 Skill 文件 CRUD 能力。
 type SkillHandler struct {
-	repo *db.SkillRepo
+	repo          *db.SkillRepo
+	llmPromptRepo *db.LLMPromptTemplateRepo
 }
 
 // NewSkillHandler 创建 Skill 处理器。
-func NewSkillHandler(repo *db.SkillRepo) *SkillHandler {
-	return &SkillHandler{repo: repo}
+func NewSkillHandler(repo *db.SkillRepo, llmPromptRepo *db.LLMPromptTemplateRepo) *SkillHandler {
+	return &SkillHandler{
+		repo:          repo,
+		llmPromptRepo: llmPromptRepo,
+	}
 }
 
 // List 返回 Skill 列表。
@@ -44,7 +48,7 @@ func (h *SkillHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	result := make([]map[string]interface{}, 0, len(items))
 	for _, item := range items {
-		result = append(result, toSkillItem(item, false))
+		result = append(result, h.toSkillItem(item, false))
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, httpx.Success(map[string]interface{}{
@@ -69,7 +73,7 @@ func (h *SkillHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, httpx.Success(toSkillItem(skill, true)))
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toSkillItem(skill, true)))
 }
 
 // GetActive 返回当前激活的 Skill。
@@ -86,7 +90,7 @@ func (h *SkillHandler) GetActive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, httpx.Success(toSkillItem(skill, true)))
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toSkillItem(skill, true)))
 }
 
 // Create 创建 Skill。
@@ -105,6 +109,12 @@ func (h *SkillHandler) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusBadRequest, httpx.Error(1, "name、content、provider 不能为空"))
 		return
 	}
+	if h.isQwenSkill(req.Provider) {
+		if err := h.upsertQwenPromptTemplate(req.Content); err != nil {
+			httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "保存 Qwen Prompt 模板失败"))
+			return
+		}
+	}
 
 	id, err := h.repo.Create(req.Name, req.Content, req.Provider)
 	if err != nil {
@@ -122,7 +132,7 @@ func (h *SkillHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Info("Skill 文件创建成功: %d", id)
-	httpx.WriteJSON(w, http.StatusOK, httpx.Success(toSkillItem(skill, true)))
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toSkillItem(skill, true)))
 }
 
 // Update 更新 Skill。
@@ -148,6 +158,12 @@ func (h *SkillHandler) Update(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "更新 Skill 失败"))
 		return
 	}
+	if h.isQwenSkill(req.Provider) {
+		if err := h.upsertQwenPromptTemplate(req.Content); err != nil {
+			httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "保存 Qwen Prompt 模板失败"))
+			return
+		}
+	}
 	if req.IsActive != nil {
 		if err := h.repo.UpdateActive(id, *req.IsActive); err != nil {
 			httpx.WriteJSON(w, http.StatusInternalServerError, httpx.Error(1, "更新激活状态失败"))
@@ -161,7 +177,7 @@ func (h *SkillHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.WriteJSON(w, http.StatusOK, httpx.Success(toSkillItem(skill, true)))
+	httpx.WriteJSON(w, http.StatusOK, httpx.Success(h.toSkillItem(skill, true)))
 }
 
 // Delete 删除 Skill。
@@ -178,7 +194,7 @@ func (h *SkillHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, httpx.Success(map[string]interface{}{"deleted": id}))
 }
 
-func toSkillItem(skill *db.SkillFile, withContent bool) map[string]interface{} {
+func (h *SkillHandler) toSkillItem(skill *db.SkillFile, withContent bool) map[string]interface{} {
 	item := map[string]interface{}{
 		"id":         skill.ID,
 		"name":       skill.Name,
@@ -188,7 +204,34 @@ func toSkillItem(skill *db.SkillFile, withContent bool) map[string]interface{} {
 		"updated_at": skill.UpdatedAt.Format(time.RFC3339),
 	}
 	if withContent {
-		item["content"] = skill.Content
+		item["content"] = h.skillContent(skill)
 	}
 	return item
+}
+
+func (h *SkillHandler) skillContent(skill *db.SkillFile) string {
+	if !h.isQwenSkill(skill.Provider) || h.llmPromptRepo == nil {
+		return skill.Content
+	}
+	template, err := h.llmPromptRepo.GetByKey(db.TemplateKeyQwenBackgroundSuggest)
+	if err != nil {
+		return skill.Content
+	}
+	return template.Content
+}
+
+func (h *SkillHandler) isQwenSkill(provider string) bool {
+	return provider == "qwen" || provider == "Qwen"
+}
+
+func (h *SkillHandler) upsertQwenPromptTemplate(content string) error {
+	if h.llmPromptRepo == nil {
+		return nil
+	}
+	return h.llmPromptRepo.UpsertByKey(
+		"Qwen 背景图默认建议",
+		db.TemplateKeyQwenBackgroundSuggest,
+		content,
+		"根据背景图生成 Gemini/Wan/GPT Image 的中英双语正向与反向提示词建议。",
+	)
 }
