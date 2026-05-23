@@ -22,6 +22,10 @@
 - `docs/nginx-business-routes.md`：整理 Nginx 业务路由 allowlist，便于只转发业务路由。
 - `docs/backend-package-reorganization-plan.md`：记录后端按功能包继续拆分的阶段计划，当前已先拆出前端认证服务。
 - `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/`：生成主工作区 macOS arm64 测试 release 目录，包含 `gyrh-server`、`oss-cli`、OSS 配置和发布管理脚本，不生成 `.tar.gz`。
+- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/manage.sh`：调整为发布包管理脚本，统一启动/停止后端、内嵌前端和 OSS 双端口服务，启动后打印演示端、管理端、登录页、后端/API 端口、OSS 端口、日志目录以及测试账号密码。
+- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/configs/config.yaml`：发布包日志目录调整为 `./logs/app`，并将 `alioss.auto_start` 设为 `false`，避免后端与 `manage.sh` 重复拉起 OSS。
+- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/configs/alioss-agent*.yaml`：发布包保留 OSS 配置文件，但将示例 bucket/API key 改为占位值，避免提交真实部署密钥。
+- `/release/gyrh-go-v2-202605240010-6438191-darwin-arm64/`：同步生成到主工作区根目录 `release/` 下，便于远端直接按目录包方式更新；不再生成 `.tar.gz`。
 
 ### 验证
 
@@ -30,6 +34,7 @@
 - 未登录访问 `/` 返回 `302` 到 `/login?next=/`。
 - 错误密码登录返回 `401`，并确认 `logs/app/login_error.log` 写入真实 IP。
 - 登录页文案已去除 `.env.local` 暴露，仅显示面向用户的账号密码提示。
+- `./manage.sh restart` 输出已确认包含访问地址、端口、日志目录和 `admin` / `pshow` 测试账号信息。
 
 ## 2026-05-23 16:50
 
