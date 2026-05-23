@@ -213,7 +213,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
           <h2>{selectedCategory ? `背景图库 · ${formatCategoryLabel(selectedCategory)}` : '背景图库'}</h2>
           <div className="topbar-actions">
             <button
-              className="ghost-pill icon-pill"
+              className="ghost-pill icon-pill liquid-glass-button"
               type="button"
               onClick={handleUploadClick}
               aria-label="上传背景图"
@@ -221,26 +221,19 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
             >
               <PlusIcon />
             </button>
-            <button className={`ghost-pill ${selectedCategoryId ? 'active' : ''}`} type="button" onClick={() => setCategoryPickerOpen(open => !open)}>
+            <button className={`ghost-pill liquid-glass-button ${selectedCategoryId ? 'active' : ''}`} type="button" onClick={() => setCategoryPickerOpen(open => !open)}>
               类型
             </button>
-            <button className="ghost-pill icon-pill" type="button" onClick={() => fetchBackgrounds({ force: true })}>
+            <button className="ghost-pill icon-pill liquid-glass-button" type="button" onClick={() => fetchBackgrounds({ force: true })}>
               <RefreshIcon />
             </button>
-            <button className="ghost-pill icon-pill" type="button" onClick={onBackgrounds}>
+            <button className="ghost-pill icon-pill liquid-glass-button" type="button" onClick={onBackgrounds}>
               <ImageIcon />
             </button>
           </div>
         </div>
         {categoryPickerOpen && (
           <div className="chip-row compact" style={{ marginBottom: '1rem' }}>
-            <button
-              className={`tiny-chip ${selectedCategoryId === 0 ? 'active' : ''}`}
-              type="button"
-              onClick={() => handleSelectCategory(0)}
-            >
-              全部背景
-            </button>
             {categories.map((category) => (
               <button
                 key={category.id}

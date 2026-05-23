@@ -96,6 +96,7 @@ func migrateTables(db *sql.DB) error {
 			task_id TEXT PRIMARY KEY,
 			external_task_id TEXT NOT NULL DEFAULT '',
 			provider TEXT NOT NULL DEFAULT '',
+			style_name TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'running',
 			background_prompt_id INTEGER NOT NULL DEFAULT 0,
 			image_id INTEGER NOT NULL DEFAULT 0,
@@ -109,6 +110,7 @@ func migrateTables(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("创建 image_rewrite_tasks 表失败: %w", err)
 	}
+	_, _ = db.Exec("ALTER TABLE image_rewrite_tasks ADD COLUMN style_name TEXT NOT NULL DEFAULT ''")
 
 	// 创建 reference_images 表（参考图像记录）
 	_, err = db.Exec(`

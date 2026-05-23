@@ -16,6 +16,7 @@ type RewriteTask struct {
 	TaskID             string
 	ExternalTaskID     string
 	Provider           string
+	StyleName          string
 	Status             string
 	BackgroundPromptID int64
 	ImageID            int64
@@ -29,6 +30,7 @@ type RewriteTask struct {
 type RewriteTaskCreateInput struct {
 	TaskID             string
 	Provider           string
+	StyleName          string
 	BackgroundPromptID int64
 }
 
@@ -50,10 +52,10 @@ func (r *RewriteTaskRepo) Create(input RewriteTaskCreateInput) error {
 	now := time.Now()
 	_, err := r.db.Exec(`
 		INSERT INTO image_rewrite_tasks (
-			task_id, provider, status, background_prompt_id, created_at, updated_at
+			task_id, provider, style_name, status, background_prompt_id, created_at, updated_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, input.TaskID, input.Provider, RewriteTaskStatusRunning, input.BackgroundPromptID, now, now)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, input.TaskID, input.Provider, input.StyleName, RewriteTaskStatusRunning, input.BackgroundPromptID, now, now)
 	if err != nil {
 		return fmt.Errorf("创建图像改写任务失败: %w", err)
 	}
@@ -88,7 +90,7 @@ func (r *RewriteTaskRepo) Fail(taskID string, errMsg string) error {
 
 func (r *RewriteTaskRepo) Get(taskID string) (*RewriteTask, error) {
 	row := r.db.QueryRow(`
-		SELECT task_id, external_task_id, provider, status, background_prompt_id,
+		SELECT task_id, external_task_id, provider, style_name, status, background_prompt_id,
 			image_id, asset_id, image_url, error, created_at, updated_at
 		FROM image_rewrite_tasks
 		WHERE task_id = ?
@@ -105,7 +107,7 @@ func (r *RewriteTaskRepo) Get(taskID string) (*RewriteTask, error) {
 
 func (r *RewriteTaskRepo) ListRunningWithExternalTaskIDs() ([]*RewriteTask, error) {
 	rows, err := r.db.Query(`
-		SELECT task_id, external_task_id, provider, status, background_prompt_id,
+		SELECT task_id, external_task_id, provider, style_name, status, background_prompt_id,
 			image_id, asset_id, image_url, error, created_at, updated_at
 		FROM image_rewrite_tasks
 		WHERE status = ? AND external_task_id != ''
@@ -154,6 +156,7 @@ func scanRewriteTask(row interface {
 		&task.TaskID,
 		&task.ExternalTaskID,
 		&task.Provider,
+		&task.StyleName,
 		&task.Status,
 		&task.BackgroundPromptID,
 		&task.ImageID,

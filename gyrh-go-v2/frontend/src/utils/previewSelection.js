@@ -4,6 +4,7 @@ export function normalizePreviewSelection(selection) {
       image: selection.image,
       mode: selection.mode === 'single' ? 'single' : 'compare',
       assetId: selection.assetId || '',
+      style: selection.style || '',
     };
   }
 
@@ -11,5 +12,6 @@ export function normalizePreviewSelection(selection) {
     image: selection,
     mode: 'compare',
     assetId: '',
+    style: '',
   };
 }

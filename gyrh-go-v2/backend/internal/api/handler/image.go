@@ -410,6 +410,7 @@ type RewriteRequest struct {
 	References         []ReferenceItem `json:"references"`           // 可选参考图列表
 	Provider           string          `json:"provider"`             // 模型提供者: google/wan，默认 google
 	StylePrompt        string          `json:"style_prompt"`         // 可选，仅用于风格转换的控制提示词（如果提供了 style_prompt_id，则优先使用 id 查找）
+	StyleName          string          `json:"style_name"`           // 可选，风格名称，用于记录和前端展示
 	StylePromptID      int64           `json:"style_prompt_id"`      // 可选，风格提示词 ID
 	LegacyPrompt       string          `json:"prompt"`               // 兼容旧字段，仅作为 style_prompt 别名读取
 	BackgroundPromptID int64           `json:"background_prompt_id"` // 可选，背景图提示词模板 ID
@@ -421,6 +422,7 @@ type RewriteResponse struct {
 	ID       int64  `json:"id"`                // 图像ID
 	AssetID  string `json:"asset_id"`          // 存储资源ID
 	ImageURL string `json:"image_url"`         // 访问URL
+	Style    string `json:"style,omitempty"`   // 转绘风格名称
 	TaskID   string `json:"task_id,omitempty"` // 异步任务ID
 	Status   string `json:"status"`            // 生成状态
 	Message  string `json:"message"`           // 消息
@@ -462,14 +464,15 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	stylePrompt := req.effectiveStylePrompt(h.stylePromptRepo)
+	styleName := req.effectiveStyleName(h.stylePromptRepo)
 	hasBackground := strings.TrimSpace(req.Background) != ""
 
 	if hasBackground && stylePrompt != "" {
 		return writeJSONError(w, http.StatusBadRequest, "背景融合场景不支持 style_prompt")
 	}
 
-	logger.Info("图像改写请求: provider=%s, background_prompt_id=%d, has_style_prompt=%t, references=%d",
-		req.Provider, req.BackgroundPromptID, stylePrompt != "", len(req.References))
+	logger.Info("图像改写请求: provider=%s, background_prompt_id=%d, style=%s, has_style_prompt=%t, references=%d",
+		req.Provider, req.BackgroundPromptID, styleName, stylePrompt != "", len(req.References))
 
 	if h.llmService == nil {
 		return writeJSONError(w, http.StatusInternalServerError, "LLM 服务未初始化")
@@ -480,6 +483,7 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 		if err := h.rewriteTaskRepo.Create(db.RewriteTaskCreateInput{
 			TaskID:             task.ID,
 			Provider:           req.Provider,
+			StyleName:          styleName,
 			BackgroundPromptID: req.BackgroundPromptID,
 		}); err != nil {
 			logger.Error("创建图像改写任务记录失败: %v", err)
@@ -489,12 +493,14 @@ func (h *ImageHandler) Rewrite(ctx context.Context, w http.ResponseWriter, r *ht
 	go h.runAsyncRewrite(task.ID, rewriteJob{
 		Request:            req,
 		StylePrompt:        stylePrompt,
+		StyleName:          styleName,
 		BackgroundPromptID: req.BackgroundPromptID,
 	})
 	return writeJSON(w, http.StatusOK, RewriteResponse{
 		Success: true,
 		TaskID:  task.ID,
 		Status:  string(rewriteTaskRunning),
+		Style:   styleName,
 		Message: "图像改写任务已创建",
 	})
 }
@@ -538,12 +544,13 @@ func (h *ImageHandler) composeAndPersistRewrite(ctx context.Context, req Rewrite
 		logger.Warn("解析生成图像尺寸失败: %v", err)
 	}
 
+	styleName := req.effectiveStyleName(h.stylePromptRepo)
 	imageID, err := h.imageRepo.Create(db.GeneratedImageCreateInput{
 		Name:               name,
 		Path:               assetID,
 		AssetID:            assetID,
 		IsUpscale:          false,
-		StyleTransform:     req.Provider,
+		StyleTransform:     styleName,
 		Provider:           req.Provider,
 		Status:             normalizeRewriteStatus(result.Status),
 		BackgroundPromptID: req.BackgroundPromptID,
@@ -564,6 +571,7 @@ func (h *ImageHandler) composeAndPersistRewrite(ctx context.Context, req Rewrite
 		AssetID:  assetID,
 		ImageURL: imageURL,
 		Status:   normalizeRewriteStatus(result.Status),
+		Style:    styleName,
 		Message:  "图像改写成功",
 	}, nil
 }
@@ -605,12 +613,13 @@ func (h *ImageHandler) persistComposeResult(ctx context.Context, req RewriteRequ
 		logger.Warn("解析生成图像尺寸失败: %v", err)
 	}
 
+	styleName := req.effectiveStyleName(h.stylePromptRepo)
 	imageID, err := h.imageRepo.Create(db.GeneratedImageCreateInput{
 		Name:               name,
 		Path:               assetID,
 		AssetID:            assetID,
 		IsUpscale:          false,
-		StyleTransform:     req.Provider,
+		StyleTransform:     styleName,
 		Provider:           req.Provider,
 		Status:             normalizeRewriteStatus(result.Status),
 		BackgroundPromptID: req.BackgroundPromptID,
@@ -630,6 +639,7 @@ func (h *ImageHandler) persistComposeResult(ctx context.Context, req RewriteRequ
 		AssetID:  assetID,
 		ImageURL: imageURL,
 		Status:   normalizeRewriteStatus(result.Status),
+		Style:    styleName,
 		Message:  "图像改写成功",
 	}, nil
 }
@@ -749,8 +759,10 @@ func (h *ImageHandler) restoreRunningRewriteTask(persisted *db.RewriteTask) bool
 	go h.runAsyncRewrite(persisted.TaskID, rewriteJob{
 		Request: RewriteRequest{
 			Provider:           persisted.Provider,
+			StyleName:          persisted.StyleName,
 			BackgroundPromptID: persisted.BackgroundPromptID,
 		},
+		StyleName:      persisted.StyleName,
 		ExternalTaskID: persisted.ExternalTaskID,
 	})
 	logger.Info("恢复运行中的图像改写任务: task_id=%s, external_task_id=%s", persisted.TaskID, persisted.ExternalTaskID)
@@ -767,6 +779,22 @@ func (r RewriteRequest) effectiveStylePrompt(repo *db.StylePromptRepo) string {
 	}
 	if strings.TrimSpace(r.StylePrompt) != "" {
 		return strings.TrimSpace(r.StylePrompt)
+	}
+	return strings.TrimSpace(r.LegacyPrompt)
+}
+
+func (r RewriteRequest) effectiveStyleName(repo *db.StylePromptRepo) string {
+	if name := strings.TrimSpace(r.StyleName); name != "" {
+		return name
+	}
+	if r.StylePromptID > 0 && repo != nil {
+		sp, err := repo.GetByID(r.StylePromptID)
+		if err == nil && sp != nil {
+			return strings.TrimSpace(sp.Name)
+		}
+	}
+	if prompt := strings.TrimSpace(r.StylePrompt); prompt != "" {
+		return prompt
 	}
 	return strings.TrimSpace(r.LegacyPrompt)
 }

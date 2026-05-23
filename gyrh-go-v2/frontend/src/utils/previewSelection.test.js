@@ -7,6 +7,7 @@ test('normalizes plain image values as compare preview mode', () => {
     image: '/image.png',
     mode: 'compare',
     assetId: '',
+    style: '',
   });
 });
 
@@ -15,5 +16,6 @@ test('preserves explicit single preview mode from history records', () => {
     image: '/history.png',
     mode: 'single',
     assetId: 'generated:one.png',
+    style: '',
   });
 });

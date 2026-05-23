@@ -26,6 +26,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
   const [selectedBg, setSelectedBg] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
   const [capturedAssetId, setCapturedAssetId] = useState('');
+  const [capturedStyle, setCapturedStyle] = useState('');
   const [previewMode, setPreviewMode] = useState('compare');
   const backgroundCacheRef = useRef(null);
 
@@ -71,6 +72,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
     const nextPreview = normalizePreviewSelection(selection);
     setCapturedImage(nextPreview.image);
     setCapturedAssetId(nextPreview.assetId);
+    setCapturedStyle(nextPreview.style);
     setPreviewMode(nextPreview.mode);
     changeScreen('preview');
   };
@@ -94,6 +96,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
     selectedBg,
     capturedImage,
     capturedAssetId,
+    capturedStyle,
     previewMode,
     branding,
     mode,
