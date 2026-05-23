@@ -5,6 +5,24 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-24 00:41
+
+- 分支：`feature/qwen-active-skill-template`
+- 目的：修复 `pshow` 用户登录后点击退出按钮未真正执行退出流程的问题。
+- 执行者：GPT-5.5（OpenAI）
+- commit hash：本条记录随本次提交生成。
+
+### 修改内容
+
+- `frontend/src/app/AppShell.jsx`：统一退出按钮行为，`admin` 与 `pshow/kiosk` 均调用 `logoutFrontend()` 清理后端 Cookie 和本地 session，然后跳转到 `/login`；不再让 `pshow` 只切回 dashboard。
+- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/bin/gyrh-server` 与主工作区 `/release/.../bin/gyrh-server`：重新构建并同步包含退出修复的 macOS arm64 单二进制。
+
+### 验证
+
+- `npm --prefix frontend test` 通过，49 项前端测试全部通过。
+- `npm --prefix frontend run build` 通过。
+- 主工作区 release 目录下 `./manage.sh restart` 已验证后端/内嵌前端 `9913` 可启动，未登录访问 `/` 返回 `302` 到 `/login?next=/`。
+
 ## 2026-05-24 00:33
 
 - 分支：`feature/qwen-active-skill-template`

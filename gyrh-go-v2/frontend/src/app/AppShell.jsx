@@ -75,8 +75,6 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
     setPreviewMode(nextPreview.mode);
     changeScreen('preview');
   };
-  const logout = () => changeScreen(mode === 'kiosk' ? 'dashboard' : 'logout');
-
   const goLogin = async () => {
     await logoutFrontend();
     window.location.replace('/login');
@@ -90,7 +88,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
     onStyles: goStyles,
     onCapture: goCapture,
     onPreview: goPreview,
-    onLogout: logout,
+    onLogout: goLogin,
     onLogoutAction: goLogin,
     onToggleModel: toggleModel,
     backgroundCache: backgroundCacheRef.current,
