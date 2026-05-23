@@ -5,6 +5,34 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-23 22:23
+
+- 分支：`main`
+- 目的：记录全局液体玻璃主题、工作台背景筛选收敛，以及转绘结果风格标记与入库能力。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`902b2b3`
+
+### 说明
+
+- 新增全局 `liquid-glass` 主题包，并在前端入口统一引入，使按钮、卡片、弹窗和主要交互控件使用液体玻璃样式。
+- 工作台背景图库类型筛选取消“全部背景”入口，继续按默认 `场景/电影` 类型优先加载。
+- 转绘请求新增风格名称透传，生成完成后将风格名写入 `generated_images.style_transform`，并在异步任务表保留 `style_name` 以支持任务恢复。
+- 预览页右下角新增“转绘风格”徽标，历史记录进入预览时会继续携带并展示该风格。
+
+### 修改文件
+
+- `frontend/src/theme/liquid-glass.css`：新增全局液体玻璃主题样式。
+- `frontend/src/main.jsx`、`frontend/src/screens/DashboardScreen.jsx`、`frontend/src/styles.css`：接入主题、收敛工作台类型筛选入口并新增预览风格徽标样式。
+- `frontend/src/screens/PreviewScreen.jsx`、`frontend/src/app/AppShell.jsx`、`frontend/src/utils/historyRecords.js`、`frontend/src/utils/previewSelection.js`：透传转绘风格并支持历史预览展示。
+- `backend/internal/api/handler/image.go`、`backend/internal/api/handler/rewrite_task.go`、`backend/internal/db/db.go`、`backend/internal/db/rewrite_task.go`：记录和恢复转绘风格元数据。
+- `backend/internal/api/handler/image_async_test.go`、`frontend/src/utils/historyRecords.test.js`、`frontend/src/utils/previewSelection.test.js`：补充风格入库与前端透传测试。
+
+### 验证
+
+- 后端全量测试通过：`go test ./...`。
+- 前端单元测试通过：`npm test`，45/45 通过。
+- 前端生产构建通过：`npm run build`。
+
 ## 2026-05-23 21:47
 
 - 分支：`main`
