@@ -1,5 +1,12 @@
 import { buildImageThumbnailUrl } from './imageThumbs.js';
 
+const PROVIDER_STYLE_VALUES = new Set(['google', 'wan', '302-gpt-image']);
+
+export function normalizeHistoryStyle(styleTransform = '') {
+  const style = String(styleTransform || '').trim();
+  return PROVIDER_STYLE_VALUES.has(style.toLowerCase()) ? '' : style;
+}
+
 export function mapGeneratedImagesToHistoryRecords(images = []) {
   return images.map((img) => ({
     id: img.id,
@@ -7,7 +14,7 @@ export function mapGeneratedImagesToHistoryRecords(images = []) {
     rawUrl: img.image_url || `/api/v1/images/view?id=${img.id}`,
     assetId: img.asset_id || '',
     provider: img.provider || img.style_transform,
-    style: img.style_transform || '',
+    style: normalizeHistoryStyle(img.style_transform),
     status: img.status,
     created_at: img.created_at,
     width: img.image_width || 0,

@@ -53,6 +53,7 @@ test('maps generated images to newest-first history records without reordering',
   assert.equal(records[0].rawUrl, 'https://example.com/newest.png');
   assert.equal(records[0].style, '水彩电影');
   assert.equal(records[1].provider, 'google');
+  assert.equal(records[1].style, '');
   assert.equal(records[1].width, 0);
   assert.equal(records[1].height, 0);
 });

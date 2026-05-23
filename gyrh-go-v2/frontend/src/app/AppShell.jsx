@@ -127,10 +127,6 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
         {screen === 'login' && mode === 'admin' ? <LoginScreen {...navHandlers} /> : null}
         {screen === 'logout' && mode === 'admin' ? <LogoutScreen {...navHandlers} /> : null}
       </div>
-      <div className="status-pill">
-        <span className="status-dot" />
-        <span>{activeScreen.label}</span>
-      </div>
     </div>
   );
 }

@@ -11,9 +11,9 @@ import {
 } from '../utils/historyRecords';
 import { getModelLabel } from '../utils/modelProvider';
 
-export function HeaderIcon({ icon, label, onClick }) {
+export function HeaderIcon({ icon, label, onClick, disabled = false, title }) {
   return (
-    <button className="header-icon" type="button" onClick={onClick}>
+    <button className="header-icon" type="button" onClick={onClick} disabled={disabled} title={title}>
       {label ? <span>{label}</span> : icon}
     </button>
   );
@@ -55,7 +55,7 @@ export function SimpleFrame({ title, children, onHome, onHistory, onLogout, onTo
   return (
     <div className="simple-screen">
       <TopBar title={title} branding={branding}>
-        <HeaderIcon label={getModelLabel(model)} onClick={onToggleModel} />
+        <HeaderIcon label={getModelLabel(model)} disabled title="模型暂时锁定" />
         <HeaderIcon icon={<HomeIcon />} onClick={onHome} />
         <HeaderIcon icon={<StackIcon />} onClick={onHistory} />
         <HeaderIcon icon={<ExitIcon />} onClick={onLogout} />

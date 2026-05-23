@@ -55,11 +55,12 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
 
   const handleStyleTransfer = async (styleId, styleName) => {
     if (!originalImage || isTransferring) return;
+    const nextStyle = styleName || '';
     setIsTransferring(true);
     try {
       const payload = {
         style_prompt_id: styleId,
-        style_name: styleName,
+        style_name: nextStyle,
         provider: getProviderForModel(model)
       };
 
@@ -118,15 +119,7 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
 
       if (data && data.image_url) {
         setCurrentImage(data.image_url);
-        setCurrentStyle(data.style || styleName || '');
-        if (onPreview) {
-          onPreview({
-            image: data.image_url,
-            mode: previewMode,
-            assetId: data.asset_id || '',
-            style: data.style || styleName || '',
-          });
-        }
+        setCurrentStyle(data.style || nextStyle);
       }
     } catch (err) {
       console.error('Style transfer failed:', err);

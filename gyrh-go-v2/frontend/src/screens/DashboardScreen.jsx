@@ -190,7 +190,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
       branding={branding}
       headerActions={
         <>
-          <HeaderIcon label={getModelLabel(model)} onClick={onToggleModel} />
+          <HeaderIcon label={getModelLabel(model)} disabled title="模型暂时锁定" />
           <HeaderIcon icon={<HomeIcon />} onClick={onHome} />
           <HeaderIcon icon={<StackIcon />} onClick={onHistory} />
           <HeaderIcon icon={<ExitIcon />} onClick={onLogout} />

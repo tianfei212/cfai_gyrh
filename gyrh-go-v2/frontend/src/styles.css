@@ -379,6 +379,7 @@ textarea {
   border-color: rgba(255, 181, 188, 0.35);
 }
 
+.header-icon:disabled,
 .tiny-chip:disabled,
 .slider-button:disabled {
   cursor: not-allowed;
@@ -386,6 +387,7 @@ textarea {
   transform: none;
 }
 
+.header-icon:disabled:hover,
 .tiny-chip:disabled:hover,
 .slider-button:disabled:hover {
   transform: none;
