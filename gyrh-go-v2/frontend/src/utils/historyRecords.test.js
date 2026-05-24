@@ -25,6 +25,7 @@ test('maps generated images to newest-first history records without reordering',
       asset_id: 'generated:newest.png',
       image_url: 'https://example.com/newest.png',
       provider: 'wan',
+      style_transform: '水彩电影',
       status: 'succeeded',
       created_at: '2026-05-11T14:00:00Z',
       image_width: 1080,
@@ -50,7 +51,9 @@ test('maps generated images to newest-first history records without reordering',
   );
   assert.equal(records[0].assetId, 'generated:newest.png');
   assert.equal(records[0].rawUrl, 'https://example.com/newest.png');
+  assert.equal(records[0].style, '水彩电影');
   assert.equal(records[1].provider, 'google');
+  assert.equal(records[1].style, '');
   assert.equal(records[1].width, 0);
   assert.equal(records[1].height, 0);
 });
@@ -66,11 +69,13 @@ test('builds single-image preview payload from a history record', () => {
       url: '/api/v1/images/thumbnail?asset_id=one&w=400&h=225',
       rawUrl: '/api/v1/images/view?id=1',
       assetId: 'generated:one.png',
+      style: '漫画风格',
     }),
     {
       image: '/api/v1/images/view?id=1',
       mode: 'single',
       assetId: 'generated:one.png',
+      style: '漫画风格',
     },
   );
 });

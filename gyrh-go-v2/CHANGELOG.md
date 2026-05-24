@@ -5,13 +5,39 @@
 执行者格式：人工 或 Claude <模型名>（<model-string>，Anthropic）。
 仅记录代码 / 配置 / 文档层面的变更；个人调试痕迹（缓存、PID、临时日志）不在此记录。
 
+## 2026-05-24 10:40
+
+- 分支：`fix/3.0.3-restore-liquid-glass`
+- 版本：`3.0.3`
+- 目的：修复 `3.0.2` 发布分支遗漏苹果液体玻璃 UI、响应式窗体和背景分类主线改动的问题，同时保留登录与业务接口防护。
+- 执行者：GPT-5.5（OpenAI）
+- commit hash：本条记录随本次提交生成。
+
+### 修改内容
+
+- 合并 `main` 上的液体玻璃 UI 主线，恢复 `frontend/src/theme/liquid-glass.css` 和 `frontend/src/main.jsx` 对该主题的统一引入。
+- 恢复工作台背景图库工具栏、全图预览、预览页风格徽标、响应式窗体布局、背景分类管理与筛选相关前后端改动。
+- 保留 `3.0.2` 的前端登录鉴权、业务 API 未登录拦截、随机路由跳转登录、失败登录审计和 `pshow` 退出修复。
+- 修复合并后的后端装配，确保背景分类 Handler 与前端鉴权 Handler 同时注册到 API 路由。
+- 新增回归测试，要求前端入口必须加载 `theme/liquid-glass.css`，防止后续发布再次丢失苹果液体玻璃皮肤。
+- 新增 `.cursor/rules/check-changelog-first.mdc`，要求后续任何任务开始前先检查 `CHANGELOG.md`。
+
+### 验证
+
+- 已先确认新增液体玻璃入口测试在 `3.0.2` 基线上失败，复现本次 UI 皮肤丢失问题。
+- `npm --prefix frontend test` 通过，55 项前端测试全部通过，包含 `main entry loads the liquid glass skin` 回归测试。
+- `npm --prefix frontend run build` 通过，生成 `dist/assets/index-BKm18PjE.css` 与 `dist/assets/index-C5TwNCAa.js`。
+- `npm --prefix frontend run build -- --outDir ../backend/internal/frontend/dist --emptyOutDir` 通过，已验证恢复后的前端可被 Go embed 构建目录接收。
+- `go test ./internal/api/handler ./internal/db ./internal/frontend ./internal/application/frontendauth ./internal/platform/app` 通过，确认背景分类、登录鉴权、内嵌前端和后端装配可用。
+- 已检查嵌入式构建 CSS 包含 `--liquid-glass-bg`、`--liquid-surface` 等液体玻璃变量。
+
 ## 2026-05-24 01:10
 
 - 分支：`feature/qwen-active-skill-template`
 - 版本：`3.0.2`
 - 目的：发布前端登录与业务接口防护修复，并补充线上鉴权与随机路由防护验证记录。
 - 执行者：GPT-5.5（OpenAI）
-- commit hash：本条记录随本次提交生成。
+- commit hash：`4994343`
 
 ### 修改内容
 
@@ -20,7 +46,6 @@
 - `backend/internal/logger/logger.go`：增加失败登录审计日志，记录真实 IP、RemoteAddr、User-Agent、用户名和失败原因，便于追踪随机密码与暴力尝试。
 - `frontend/src/app/AppShell.jsx`：修复 `pshow` 退出流程，确保 `admin` 与 `pshow/kiosk` 都调用后端退出接口并清理本地会话。
 - `docs/nginx-business-routes.md`：明确线上 Nginx 只转发业务 allowlist 路由，其余路径由默认拦截规则处理。
-- `CHANGELOG.md`：记录 `3.0.2` 防护修复内容、线上压测和随机路由验证结果。
 
 ### 验证
 
@@ -29,104 +54,246 @@
 - 线上业务接口按每秒 5 次、每个接口 1 次进行无登录态验证：43 个接口中 `GET /api/v1/health` 和 `POST /api/v1/frontend-auth/logout` 返回 `200`，其余 41 个受保护接口返回 `401`。
 - 线上主域名后随机组合路径按每秒 5 次请求 50 次：全部返回 `302` 到 `/login?next=...`，无 5xx 或连接失败。
 
-## 2026-05-24 00:41
+## 2026-05-23 22:23
 
-- 分支：`feature/qwen-active-skill-template`
-- 目的：修复 `pshow` 用户登录后点击退出按钮未真正执行退出流程的问题。
-- 执行者：GPT-5.5（OpenAI）
-- commit hash：`3767127`
-
-### 修改内容
-
-- `frontend/src/app/AppShell.jsx`：统一退出按钮行为，`admin` 与 `pshow/kiosk` 均调用 `logoutFrontend()` 清理后端 Cookie 和本地 session，然后跳转到 `/login`；不再让 `pshow` 只切回 dashboard。
-- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/bin/gyrh-server` 与主工作区 `/release/.../bin/gyrh-server`：重新构建并同步包含退出修复的 macOS arm64 单二进制。
-
-### 验证
-
-- `npm --prefix frontend test` 通过，49 项前端测试全部通过。
-- `npm --prefix frontend run build` 通过。
-- 主工作区 release 目录下 `./manage.sh restart` 已验证后端/内嵌前端 `9913` 可启动，未登录访问 `/` 返回 `302` 到 `/login?next=/`。
-
-## 2026-05-24 00:33
-
-- 分支：`feature/qwen-active-skill-template`
-- 目的：新增前端 JWT 登录、角色鉴权、登录审计日志，并生成主工作区 macOS release 目录用于测试。
-- 执行者：GPT-5.5（OpenAI）
-- commit hash：`3059796`，补充发布包 `manage.sh` 与主工作区 release 说明见 `04575e1`。
-
-### 修改内容
-
-- `backend/internal/application/frontendauth/`：新增前端登录应用服务，负责 JWT 签发/校验、HttpOnly Cookie 会话、`.env.local` 热加载、角色信息和真实 IP 解析。
-- `backend/internal/api/handler/frontend_auth.go`：新增 `HOME1` / `HOME2` 登录接口、会话接口、退出接口和 API 会话中间件；登录成功/失败均记录详细审计日志。
-- `backend/internal/logger/logger.go`：新增 `login_error.log` 专用失败登录审计文件，记录失败时间、真实 IP、用户名、RemoteAddr、User-Agent 和失败原因。
-- `backend/internal/frontend/frontend.go` 与 `backend/internal/api/router.go`：对 SPA 页面和业务 API 增加前端会话鉴权，未登录强制跳转 `/login` 或返回 `401`。
-- `frontend/src/services/frontendAuth.js`、`frontend/src/app/routes.jsx`、`frontend/src/screens/LoginScreen.jsx`：新增前端登录页、角色跳转、退出清理、前端 token 请求头和禁止保存密码的表单处理。
-- `docs/nginx-business-routes.md`：整理 Nginx 业务路由 allowlist，便于只转发业务路由。
-- `docs/backend-package-reorganization-plan.md`：记录后端按功能包继续拆分的阶段计划，当前已先拆出前端认证服务。
-- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/`：生成主工作区 macOS arm64 测试 release 目录，包含 `gyrh-server`、`oss-cli`、OSS 配置和发布管理脚本，不生成 `.tar.gz`。
-- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/manage.sh`：调整为发布包管理脚本，统一启动/停止后端、内嵌前端和 OSS 双端口服务，启动后打印演示端、管理端、登录页、后端/API 端口、OSS 端口、日志目录以及测试账号密码。
-- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/configs/config.yaml`：发布包日志目录调整为 `./logs/app`，并将 `alioss.auto_start` 设为 `false`，避免后端与 `manage.sh` 重复拉起 OSS。
-- `release/gyrh-go-v2-202605240010-6438191-darwin-arm64/configs/alioss-agent*.yaml`：发布包保留 OSS 配置文件，但将示例 bucket/API key 改为占位值，避免提交真实部署密钥。
-- `/release/gyrh-go-v2-202605240010-6438191-darwin-arm64/`：同步生成到主工作区根目录 `release/` 下，便于远端直接按目录包方式更新；不再生成 `.tar.gz`。
-
-### 验证
-
-- `go test -race ./internal/logger ./internal/application/frontendauth ./internal/api/handler ./internal/frontend` 通过。
-- release 目录下 `./manage.sh restart` 已验证后端/内嵌前端 `9913`、OSS 背景素材 `18080`、OSS 生成素材 `18081` 均可启动。
-- 未登录访问 `/` 返回 `302` 到 `/login?next=/`。
-- 错误密码登录返回 `401`，并确认 `logs/app/login_error.log` 写入真实 IP。
-- 登录页文案已去除 `.env.local` 暴露，仅显示面向用户的账号密码提示。
-- `./manage.sh restart` 输出已确认包含访问地址、端口、日志目录和 `admin` / `pshow` 测试账号信息。
-
-## 2026-05-23 16:50
-
-- 分支：`feature/qwen-active-skill-template`
-- 目的：新增 Windows 展厅 kiosk 壳子，调用本机已安装 Google Chrome 全屏打开配置 URL。
+- 分支：`main`
+- 目的：记录全局液体玻璃主题、工作台背景筛选收敛，以及转绘结果风格标记与入库能力。
 - 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
-- commit hash：`3059796`
+- commit hash：`902b2b3`
 
-### 修改内容
+### 说明
 
-- `backend/cmd/kiosk-client/main.go`：新增 kiosk client 独立入口，支持 `-config` 指定配置文件。
-- `backend/internal/kiosk/`：新增配置加载、Chrome 自动查找、kiosk 启动参数生成和 Chrome 进程守护逻辑。
-- `configs/kiosk-client.yaml`：新增 Windows kiosk client 配置模板，默认 URL 为 `http://127.0.0.1:9913/admin_viewer`，`chrome_path` 为空时自动查找 Chrome。
-- `scripts/build_kiosk_client_windows.sh`：新增 Windows amd64 壳子构建和 zip 打包脚本。
-- `CHANGELOG.md`：记录本次 kiosk 壳子实现和验证结果。
+- 新增全局 `liquid-glass` 主题包，并在前端入口统一引入，使按钮、卡片、弹窗和主要交互控件使用液体玻璃样式。
+- 工作台背景图库类型筛选取消“全部背景”入口，继续按默认 `场景/电影` 类型优先加载。
+- 转绘请求新增风格名称透传，生成完成后将风格名写入 `generated_images.style_transform`，并在异步任务表保留 `style_name` 以支持任务恢复。
+- 预览页右下角新增“转绘风格”徽标，历史记录进入预览时会继续携带并展示该风格。
+
+### 修改文件
+
+- `frontend/src/theme/liquid-glass.css`：新增全局液体玻璃主题样式。
+- `frontend/src/main.jsx`、`frontend/src/screens/DashboardScreen.jsx`、`frontend/src/styles.css`：接入主题、收敛工作台类型筛选入口并新增预览风格徽标样式。
+- `frontend/src/screens/PreviewScreen.jsx`、`frontend/src/app/AppShell.jsx`、`frontend/src/utils/historyRecords.js`、`frontend/src/utils/previewSelection.js`：透传转绘风格并支持历史预览展示。
+- `backend/internal/api/handler/image.go`、`backend/internal/api/handler/rewrite_task.go`、`backend/internal/db/db.go`、`backend/internal/db/rewrite_task.go`：记录和恢复转绘风格元数据。
+- `backend/internal/api/handler/image_async_test.go`、`frontend/src/utils/historyRecords.test.js`、`frontend/src/utils/previewSelection.test.js`：补充风格入库与前端透传测试。
 
 ### 验证
 
-- `go test ./internal/kiosk` 通过。
-- `GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o /tmp/gyrh-kiosk-client.exe ./cmd/kiosk-client` 通过。
-- linter 检查触达 Go 文件无诊断错误。
-- 已生成 Windows amd64 kiosk client 包：`release/gyrh-kiosk-client-202605231650-6438191-windows-amd64.zip`。
+- 后端全量测试通过：`go test ./...`。
+- 前端单元测试通过：`npm test`，45/45 通过。
+- 前端生产构建通过：`npm run build`。
 
-## 2026-05-22 21:37
+## 2026-05-23 21:47
 
-- 分支：`feature/fullscreen-responsive-adaptation`
-- 目的：按用户要求调整主界面背景图库排序为名称升序，并重新生成 Ubuntu amd64 release 包。
+- 分支：`main`
+- 目的：优化工作台背景图库布局，移除占用纵向空间的上传区域，将上传入口合并到图库工具栏。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`1a5a0a0`
+
+### 说明
+
+- 删除工作台顶部“快速选择场景/上传背景图”整块区域，不再占用背景图库上方空间。
+- 将本地背景上传 `+` 图标移动到“类型”按钮左侧，作为同一排工具按钮。
+- 本地上传图片选择后直接进入使用流程，不再额外展示 HUD、预览条或二次确认区域。
+- 背景图库每页加载数量从 6 调整为 9，三列布局下默认可展示三行。
+- 清理旧上传区域、HUD 使用按钮和拖拽上传相关的死样式/状态。
+
+### 修改文件
+
+- `frontend/src/screens/DashboardScreen.jsx`：移除大上传区和 HUD 上传区域，新增工具栏上传按钮，并调整默认分页数量。
+- `frontend/src/styles.css`：移除旧上传区/HUD 样式，扩大背景图库展示区域。
+
+### 验证
+
+- 前端单元测试通过：`npm test`，45/45 通过。
+- 前端生产构建通过：`npm run build -- --outDir ../backend/internal/frontend/dist --emptyOutDir`。
+- linter 检查通过，触达文件无诊断错误。
+- 已用 `go run` 重启本地测试服务并启动 OSS；当前前端入口为 `/assets/index-C7nSfzus.js` 与 `/assets/index-CCuyFSrd.css`。
+
+## 2026-05-23 00:08
+
+- 分支：`main`
+- 目的：发布 `3.0.1`，同步背景分类管理、全终端响应式适配、工作台背景图全图放大预览和单二进制 release 产物说明。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- tag：`3.0.1`
+- commit hash：本条记录随本次提交生成。
+
+### 发布内容
+
+- 合并并保留 `feature/fullscreen-responsive-adaptation` 的前端响应式与缓存逻辑，叠加背景图类型管理能力。
+- 背景图类型支持“大类/小类”二级分类、`default/default` 兜底分类、类型 CRUD、背景图多类型绑定和工作台按类型筛选。
+- 工作台背景图库新增放大镜 HUD 图标，点击后通过后端 OSS 全图 WebP 地址打开大图预览。
+- 预览弹窗改为 React Portal 渲染到 `document.body`，使用百分比布局与 `object-fit: contain` 约束在当前视口内，避免移动端或低高度终端出现长滚动。
+- 放大入口使用放大镜图标，关闭入口使用 `X` 图标。
+- release 包继续保持“前端内嵌到 `gyrh-server` 单文件后端”的部署形态，线上只更新对应平台的 `bin/gyrh-server` 即可获得本次前端功能更新。
+
+### 数据库与兼容性
+
+- 新增 `background_categories` 与 `background_category_bindings`，背景图和类型为多对多关系。
+- 数据库升级脚本会创建 `default/default` 类型，并将历史未绑定背景图回填到该类型。
+- 删除非默认类型时，相关背景图会回归 `default/default`；`default/default` 不允许删除。
+- 线上已有正确业务数据时，不应覆盖线上 `backend/data/gyrh.db`；只需执行/确认升级脚本和替换二进制。
+
+### Release 产物
+
+- 当前项目目录下的 release 产物：
+  - `release/gyrh-go-v2-202605222328-44a412f-darwin-arm64.tar.gz`
+  - `release/gyrh-go-v2-202605222328-44a412f-ubuntu-amd64.tar.gz`
+- macOS ARM64 包内 `bin/gyrh-server` 为 Mach-O arm64 单文件。
+- Ubuntu amd64 包内 `bin/gyrh-server` 为 Linux x86-64 ELF 单文件。
+- 两个平台二进制均已确认内嵌最新前端入口：
+  - `/assets/index-tdw_bnPy.js`
+  - `/assets/index-vaheVFXX.css`
+
+### 验证
+
+- 前端单元测试通过：`npm test`，45/45 通过。
+- 前端生产构建通过：`npm run build -- --outDir ../backend/internal/frontend/dist --emptyOutDir`。
+- macOS release 单文件已从当前项目 `release/` 目录启动测试，`/`、`/admin_viewer`、MediaPipe 模型资源返回 `200`。
+- 带签名背景列表 API 验证通过：`code=0`、`total=31`。
+- Ubuntu amd64 二进制已静态验证为 Linux x86-64 ELF，并确认内嵌最新前端入口与 MediaPipe 资源；当前 macOS 环境无法直接运行 Linux ELF。
+- 当前测试服务使用当前项目目录的 `release/gyrh-go-v2-202605222328-44a412f-darwin-arm64`，开发前端 `9912` 已关闭。
+
+### 部署注意事项
+
+- 如果目标机器已有正确配置、数据库、生成图目录和 OSS 二进制，本次前端与后端代码更新只需替换对应平台的 `bin/gyrh-server`。
+- 如果目标机器缺少 `bin/oss-cli`，需要补齐对应平台 aliOSS 二进制；否则后端自动启动 OSS 时会失败。
+- `release/`、运行态数据库、WAL/SHM、缓存和本地 OSS 软链接不纳入 git 提交。
+
+## 2026-05-22 23:26
+
+- 分支：`main`
+- 目的：为工作台背景图库增加全图放大预览，并修正弹窗在全终端适配下产生长滚动的问题。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`fe96815`
+
+### 说明
+
+- 在工作台背景图库卡片右上角新增放大镜 HUD 图标，点击后通过后端 OSS 全图 WebP 地址打开大图预览。
+- 预览弹窗改为 React Portal 渲染到 `document.body`，避免被工作台外层滚动容器影响。
+- 弹窗、图片舞台和图片本身使用百分比约束与 `object-fit: contain`，禁止内部长滚动，保持移动端和桌面端视口内可见。
+- 关闭入口改为 `X` 图标按钮，放大入口改为放大镜图标按钮。
+
+### 修改文件
+
+- `frontend/src/screens/DashboardScreen.jsx`：新增背景图全图预览状态、Portal 弹窗、放大镜入口和 `X` 关闭按钮。
+- `frontend/src/styles.css`：新增图库放大镜按钮与预览弹窗响应式布局样式。
+- `frontend/src/utils/imageThumbs.js`：新增全图预览 URL 构建工具，优先使用 OSS 原图地址。
+- `frontend/src/utils/imageThumbs.test.js`：补充全图预览 URL 构建测试。
+
+### 验证
+
+- 前端单元测试通过：`npm test`，45/45 通过。
+- 前端生产构建通过：`npm run build -- --outDir ../backend/internal/frontend/dist --emptyOutDir`。
+- 已重启前端、后端、背景 OSS 与生成图 OSS，本地端口 `9912`、`9913`、`18080`、`18081` 均处于监听状态。
+- 嵌入式前端资源已更新到 `/assets/index-tdw_bnPy.js` 与 `/assets/index-vaheVFXX.css`。
+
+## 2026-05-22 22:46
+
+- 分支：`main`
+- 目的：将已完成验证的 `feature/category-responsive-integration` 提升为本地主分支，作为背景分类管理与响应式适配集成后的主线版本。
 - 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
 - commit hash：本条记录随本次提交生成。
 
-### 修改内容
+### 说明
 
-- `backend/internal/db/background_prompt.go`：背景图提示词列表 SQL 从 `ORDER BY name DESC` 改为 `ORDER BY name ASC`，分页和非分页查询保持一致。
-- `backend/internal/db/background_prompt_test.go`：同步更新 DB 层排序回归测试，验证列表按名称升序返回。
-- `CHANGELOG.md`：记录本次排序调整、验证结果和 release 产物。
+- 当前集成分支已包含 `origin/main` 与本地 `master` 历史，可快进为主线。
+- 保留此前集成提交：
+  - `acc3d95`：背景分类管理与响应式 shell 合并。
+  - `08cee35`：记录集成 changelog。
+  - `97046bc`：修复运行态前端分类与背景管理显示问题。
+  - `055694f`：记录运行态修复 changelog。
+- 本次仅记录分支提升动作，不新增业务代码。
 
 ### 验证
 
-- `go test ./internal/db` 通过。
-- linter 检查触达 Go 文件无诊断错误。
-- 已重启本地后端，`9913` 正在监听；前端服务仍在 `9912` 监听。
-- 手动执行数据库查询确认升序结果：`SELECT id, name FROM background_prompts ORDER BY name ASC LIMIT 10 OFFSET 0;`，其中 `a_战场` 位于数字和 `IMG_...` 名称之后。
+- 分支关系检查确认 `origin/main` 是当前集成分支祖先。
+- 本地 `main` 分支不存在，避免覆盖已有本地 `main` 工作区。
+- 未提交运行态数据库、WAL/SHM、日志、`.env.local`、aliOSS 私有配置或本地软链接。
 
-### Release
+## 2026-05-22 22:43
 
-- 重新生成 Ubuntu amd64 release：`release/gyrh-go-v2-202605222137-6438191-ubuntu-amd64.tar.gz`。
-- Ubuntu 单文件更新目标：`release/gyrh-go-v2-202605222137-6438191-ubuntu-amd64/bin/gyrh-server`。
-- `bin/gyrh-server` 验证为 Linux x86-64 ELF，大小约 `27M`。
-- Ubuntu `bin/gyrh-server` SHA256：`3c54cc4d49496b17c3df91b82075d859c6a66c56d00df691f90afef8c2f2de5d`。
-- 本次记录不包含 `backend/data/gyrh.db*`、`release/` 等运行和打包产物提交。
+- 分支：`feature/category-responsive-integration`
+- 目的：修复背景分类集成后的运行态前端错误和背景管理表格显示问题，并重新校准本地运行验证的数据库、鉴权和 OSS 配置。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`97046bc`
+
+### 本次问题
+
+- 工作台打开时报 `ReferenceError: fetchApi is not defined`，导致背景分类列表加载失败。
+- 背景管理页在当前缩放/响应式布局下，把 `data-label` 插入到了单元格内容前，显示成“图片名称xxx”和“类型default/default”。
+- 本地验证过程中曾错误地从 integration worktree 启动后端，先后出现过测试库数据、鉴权 env 不一致、OSS 未启动、OSS bucket 前缀错误等运行态问题。
+
+### 解决方案
+
+- `DashboardScreen.jsx` 补充 `fetchApi` import，恢复工作台分类接口请求。
+- `BackgroundManagerScreen.jsx` 移除背景管理表格行中会拼接到内容前的 `data-label`，保留表头展示，避免名称和类型内容被加前缀。
+- 本地重启时使用主工作区真实数据库路径、主工作区 `.env.local` / `frontend/.env.local` 和真实 `configs/alioss-agent.yaml`，确保背景数据、签名鉴权、OSS 背景 bucket 前缀一致。
+
+### 修改文件
+
+- `frontend/src/screens/DashboardScreen.jsx`：补充 `fetchApi` import。
+- `frontend/src/screens/BackgroundManagerScreen.jsx`：移除背景管理表格内容列的 `data-label`，避免响应式标签拼入文本。
+- `CHANGELOG.md`：新增本次排障和修复记录。
+
+### 验证
+
+- 前端单元测试通过：`npm test`，43/43 通过。
+- 前端生产构建通过：`npm run build`，生成新入口 `/assets/index-C1D8LZwJ.js`。
+- 后端已同步新前端构建到 embed 目录，并重新启动。
+- 当前运行端口：
+  - 后端：`9913`。
+  - 背景 OSS：`18080`。
+  - 生成图 OSS：`18081`。
+- 带签名背景列表 API 验证返回 `code=0`、`total=31`。
+- 抽查背景管理首页前 10 个 `image_asset_id`，OSS `/view/...` 均返回 `200`。
+
+### 未提交内容说明
+
+- 本次提交不包含运行态数据库文件、WAL/SHM 文件、`frontend/dist/`、`backend/internal/frontend/dist/`、日志目录、`.env.local`、`configs/alioss-agent.yaml` 或本地 `bin/oss-cli` 软链接。
+
+## 2026-05-22 22:20
+
+- 分支：`feature/category-responsive-integration`
+- 目的：完成 `feature/background-category-management` 与 `feature/fullscreen-responsive-adaptation` 的集成合并；保留前端响应式与背景缓存逻辑，并叠加背景图二级分类管理、绑定、筛选和线上数据库升级脚本。
+- 执行者：Claude GPT-5.5（GPT-5.5，OpenAI）
+- commit hash：`acc3d95`
+
+### 合并说明
+
+- 从 `feature/fullscreen-responsive-adaptation` 新建集成分支 `feature/category-responsive-integration`，手动合并 `feature/background-category-management`。
+- 前端以响应式分支为基底，保留 Dashboard 背景缓存、响应式布局和管理表格的 `data-label` 适配，再接入分类选择、分类管理弹窗和背景-分类多选绑定。
+- 后端同时保留远端图库同步的 `gallery.external_url` 默认接口逻辑，以及背景分类仓库、分类 CRUD、背景分类绑定和分类筛选接口。
+- 新增 `scripts/upgrade_background_categories.sh`，用于线上 SQLite 数据库创建分类表、绑定表、默认 `default/default` 分类，并回填未绑定背景。
+
+### 修改文件
+
+- `backend/internal/db/background_category.go`、`backend/internal/db/background_category_test.go`：新增背景分类仓库、默认分类、绑定替换、删除回归默认分类等逻辑和测试。
+- `backend/internal/db/background_prompt.go`、`backend/internal/db/db.go`：新增分类筛选查询、绑定清理和数据库建表迁移。
+- `backend/internal/api/handler/background_category.go`、`backend/internal/api/handler/background_prompt.go`、`backend/internal/api/router.go`：新增分类 API、背景绑定 API，并让背景列表返回分类信息。
+- `backend/internal/platform/app/app.go`：初始化分类仓库并在启动时确保默认绑定。
+- `frontend/src/screens/DashboardScreen.jsx`、`frontend/src/screens/BackgroundManagerScreen.jsx`：接入工作台分类筛选、管理页分类维护和背景绑定 UI。
+- `frontend/src/app/AppShell.jsx`、`frontend/src/utils/backgroundCache.js`、`frontend/src/utils/backgroundPagination.js`：让背景缓存和分页 URL 支持 `category_id`，避免不同分类缓存串用。
+- `frontend/src/utils/backgroundCache.test.js`、`frontend/src/utils/backgroundPagination.test.js`：覆盖分类缓存隔离和分类 URL 参数。
+- `scripts/upgrade_background_categories.sh`：新增线上数据库升级脚本。
+- `CHANGELOG.md`：新增本次集成记录。
+
+### 验证
+
+- 前端依赖安装：`npm ci --prefer-offline --no-audit --no-fund`。
+- 前端单元测试通过：`npm test`，43/43 通过。
+- 前端生产构建通过：`npm run build`。
+- 后端全量测试通过：`go test ./...`。
+- 运行 smoke：
+  - 前端 `http://127.0.0.1:9912/` 返回 200。
+  - 后端 `http://127.0.0.1:9913/` 返回 200。
+  - 受保护分类接口 `GET /api/v1/background-categories` 未登录返回 401。
+  - 本地运行库分类校验结果为分类 1 条、绑定 9 条、未绑定背景 0 条。
+- 前后端已从集成 worktree 重启：前端监听 `9912`，后端监听 `9913`。
+
+### 未提交内容说明
+
+- 本次提交不包含运行态文件：`backend/data/gyrh.db-shm`、`backend/data/gyrh.db-wal`、`frontend/node_modules/`、`frontend/dist/`、`backend/internal/frontend/dist/`、日志目录和本地 `bin/oss-cli` 软链接。
+- 集成 worktree 为运行验证临时使用本地 aliOSS 配置与环境变量覆盖，相关私有配置没有纳入提交。
 
 ## 2026-05-22 17:08
 

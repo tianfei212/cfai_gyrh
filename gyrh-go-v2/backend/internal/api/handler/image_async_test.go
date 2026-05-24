@@ -381,6 +381,58 @@ func TestRewriteUsesBackgroundPromptAssetWithoutBackgroundBase64(t *testing.T) {
 	}
 }
 
+func TestRewritePersistsStyleNameOnGeneratedImage(t *testing.T) {
+	database, err := db.NewDB(t.TempDir() + "/test.db")
+	if err != nil {
+		t.Fatalf("create temp db: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	styleRepo := db.NewStylePromptRepo(database)
+	styleID, err := styleRepo.Create("漫画转绘", "comic style prompt", "", true)
+	if err != nil {
+		t.Fatalf("create style prompt: %v", err)
+	}
+
+	imageRepo := db.NewImageRepo(database)
+	handler := NewImageHandler(imageRepo, nil, styleRepo, &fakeStorageService{}, &capturingLLMService{})
+	body := `{"provider":"google","foreground":"` + base64.StdEncoding.EncodeToString(tinyPNGBytes()) + `","style_prompt_id":` + jsonNumber(styleID) + `}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/images/rewrite", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	if err := handler.Rewrite(context.Background(), w, req); err != nil {
+		t.Fatalf("Rewrite returned error: %v", err)
+	}
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", w.Code, w.Body.String())
+	}
+	taskID := decodeRewriteTaskID(t, w.Body.Bytes())
+	select {
+	case <-mustRewriteDoneChan(t, handler, taskID):
+	case <-time.After(time.Second):
+		t.Fatal("expected async rewrite task to finish")
+	}
+
+	task, ok := handler.rewriteTasks.snapshot(taskID)
+	if !ok || task.Response == nil {
+		t.Fatalf("expected completed task response, got task=%+v ok=%t", task, ok)
+	}
+	if task.Response.Style != "漫画转绘" {
+		t.Fatalf("response style = %q, want 漫画转绘", task.Response.Style)
+	}
+
+	img, err := imageRepo.GetByID(task.Response.ID)
+	if err != nil {
+		t.Fatalf("get generated image: %v", err)
+	}
+	if img.StyleTransform != "漫画转绘" {
+		t.Fatalf("style_transform = %q, want 漫画转绘", img.StyleTransform)
+	}
+	if img.Provider != "google" {
+		t.Fatalf("provider = %q, want google", img.Provider)
+	}
+}
+
 func TestThumbnailSetsThreeMinuteCacheHeader(t *testing.T) {
 	handler := NewImageHandler(nil, nil, nil, &fakeStorageService{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/images/thumbnail?asset_id=asset:bg&w=400&h=225", nil)

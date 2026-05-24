@@ -8,13 +8,14 @@ import { resolveRewriteResponse } from '../services/rewriteTask';
 import { appendImageCacheBucket } from '../utils/imageThumbs';
 import { getProviderForModel } from '../utils/modelProvider';
 
-export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, capturedAssetId = '', previewMode = 'compare', onPreview, branding = DEFAULT_BRANDING }) {
+export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, model, capturedImage, capturedAssetId = '', capturedStyle = '', previewMode = 'compare', onPreview, branding = DEFAULT_BRANDING }) {
   const [showQR, setShowQR] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
   const [stylePrompts, setStylePrompts] = useState([]);
   const [originalImage, setOriginalImage] = useState(capturedImage);
   const [currentImage, setCurrentImage] = useState(capturedImage);
+  const [currentStyle, setCurrentStyle] = useState(capturedStyle);
   const isSinglePreview = previewMode === 'single';
 
   useEffect(() => {
@@ -49,14 +50,17 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
       setOriginalImage(capturedImage);
     }
     setCurrentImage(capturedImage);
-  }, [capturedImage]);
+    setCurrentStyle(capturedStyle || '');
+  }, [capturedImage, capturedStyle]);
 
   const handleStyleTransfer = async (styleId, styleName) => {
     if (!originalImage || isTransferring) return;
+    const nextStyle = styleName || '';
     setIsTransferring(true);
     try {
       const payload = {
         style_prompt_id: styleId,
+        style_name: nextStyle,
         provider: getProviderForModel(model)
       };
 
@@ -115,9 +119,7 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
 
       if (data && data.image_url) {
         setCurrentImage(data.image_url);
-        if (onPreview) {
-          onPreview(data.image_url);
-        }
+        setCurrentStyle(data.style || nextStyle);
       }
     } catch (err) {
       console.error('Style transfer failed:', err);
@@ -228,6 +230,11 @@ export function PreviewScreen({ onHome, onHistory, onLogout, onToggleModel, mode
                 <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', color: '#fff', fontSize: '12px' }}>
                   效果图
                 </div>
+                {currentStyle ? (
+                  <div className="preview-style-badge" title={`转绘风格：${currentStyle}`}>
+                    转绘风格：{currentStyle}
+                  </div>
+                ) : null}
                 
                 {/* HUB Style Logo Overlay (Bottom Left) */}
                 <div className="preview-hud-logo">

@@ -27,12 +27,13 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
   const [selectedBg, setSelectedBg] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
   const [capturedAssetId, setCapturedAssetId] = useState('');
+  const [capturedStyle, setCapturedStyle] = useState('');
   const [previewMode, setPreviewMode] = useState('compare');
   const backgroundCacheRef = useRef(null);
 
   if (!backgroundCacheRef.current) {
     backgroundCacheRef.current = createBackgroundCache({
-      fetchPage: async ({ page, limit }) => fetchApi(buildBackgroundPromptListUrl(page, limit)),
+      fetchPage: async ({ page, limit, categoryId }) => fetchApi(buildBackgroundPromptListUrl(page, limit, { categoryId })),
     });
   }
 
@@ -72,6 +73,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
     const nextPreview = normalizePreviewSelection(selection);
     setCapturedImage(nextPreview.image);
     setCapturedAssetId(nextPreview.assetId);
+    setCapturedStyle(nextPreview.style);
     setPreviewMode(nextPreview.mode);
     changeScreen('preview');
   };
@@ -96,6 +98,7 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
     selectedBg,
     capturedImage,
     capturedAssetId,
+    capturedStyle,
     previewMode,
     branding,
     mode,
@@ -125,10 +128,6 @@ export function AppShell({ mode = 'admin', navigationItems = adminScreens }) {
         {screen === 'rendering' ? <RenderingScreen {...navHandlers} /> : null}
         {screen === 'login' && mode === 'admin' ? <LoginScreen {...navHandlers} /> : null}
         {screen === 'logout' && mode === 'admin' ? <LogoutScreen {...navHandlers} /> : null}
-      </div>
-      <div className="status-pill">
-        <span className="status-dot" />
-        <span>{activeScreen.label}</span>
       </div>
     </div>
   );

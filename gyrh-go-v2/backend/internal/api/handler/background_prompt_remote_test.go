@@ -92,7 +92,7 @@ func TestBackgroundPromptListReturnsOSSImageURLAndStableProxyURL(t *testing.T) {
 	}
 
 	storageSvc := &fakeStorageService{}
-	handler := NewBackgroundPromptHandler(repo, storageSvc, nil, "")
+	handler := NewBackgroundPromptHandler(repo, storageSvc, nil, "", nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/background-prompts?limit=6&offset=0", nil)
 	w := httptest.NewRecorder()
 
@@ -126,6 +126,7 @@ type fakeStorageService struct {
 	getImageURLCalls int
 	saveStarted      chan struct{}
 	saveRelease      chan struct{}
+	deleted          []string
 }
 
 func (s *fakeStorageService) Save(ctx context.Context, data []byte, filename string) (string, error) {
@@ -165,6 +166,7 @@ func (s *fakeStorageService) GetForModelUpload(ctx context.Context, assetID stri
 }
 
 func (s *fakeStorageService) Delete(ctx context.Context, assetID string) error {
+	s.deleted = append(s.deleted, assetID)
 	return nil
 }
 
@@ -234,7 +236,21 @@ func TestSyncRemoteImportsCurrentPageWithoutSuggest(t *testing.T) {
 			image_height INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
+		);
+		CREATE TABLE background_categories (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			parent_name TEXT NOT NULL,
+			child_name TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE UNIQUE INDEX idx_background_categories_parent_child ON background_categories(parent_name, child_name);
+		CREATE TABLE background_category_bindings (
+			category_id INTEGER NOT NULL,
+			background_prompt_id INTEGER NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (category_id, background_prompt_id)
+		);
 	`)
 	if err != nil {
 		t.Fatalf("create table: %v", err)
@@ -245,8 +261,12 @@ func TestSyncRemoteImportsCurrentPageWithoutSuggest(t *testing.T) {
 	}
 
 	repo := db.NewBackgroundPromptRepo(&db.DB{DB: rawDB})
+	categoryRepo := db.NewBackgroundCategoryRepo(&db.DB{DB: rawDB})
+	if _, err := categoryRepo.EnsureDefault(); err != nil {
+		t.Fatalf("ensure default category: %v", err)
+	}
 	store := &fakeStorageService{}
-	h := NewBackgroundPromptHandler(repo, store, nil, "")
+	h := NewBackgroundPromptHandler(repo, store, nil, "", categoryRepo)
 
 	body := strings.NewReader(`{"api_url":"` + remote.URL + `/picGet/api/media?page=1&pageSize=20"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/background-prompts/sync-remote", body)
@@ -288,6 +308,13 @@ func TestSyncRemoteImportsCurrentPageWithoutSuggest(t *testing.T) {
 	if item.ImageWidth != 2 || item.ImageHeight != 3 {
 		t.Fatalf("image size got %dx%d, want 2x3", item.ImageWidth, item.ImageHeight)
 	}
+	categories, err := categoryRepo.ListByBackgroundID(item.ID)
+	if err != nil {
+		t.Fatalf("list imported categories: %v", err)
+	}
+	if len(categories) != 1 || categories[0].ParentName != db.DefaultCategoryParent || categories[0].ChildName != db.DefaultCategoryChild {
+		t.Fatalf("remote import category binding = %+v, want default/default", categories)
+	}
 }
 
 func TestSyncRemoteSkipsExistingRemoteRecord(t *testing.T) {
@@ -319,7 +346,21 @@ func TestSyncRemoteSkipsExistingRemoteRecord(t *testing.T) {
 			image_height INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
+		);
+		CREATE TABLE background_categories (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			parent_name TEXT NOT NULL,
+			child_name TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE UNIQUE INDEX idx_background_categories_parent_child ON background_categories(parent_name, child_name);
+		CREATE TABLE background_category_bindings (
+			category_id INTEGER NOT NULL,
+			background_prompt_id INTEGER NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (category_id, background_prompt_id)
+		);
 	`)
 	if err != nil {
 		t.Fatalf("create table: %v", err)
@@ -330,6 +371,10 @@ func TestSyncRemoteSkipsExistingRemoteRecord(t *testing.T) {
 	}
 
 	repo := db.NewBackgroundPromptRepo(&db.DB{DB: rawDB})
+	categoryRepo := db.NewBackgroundCategoryRepo(&db.DB{DB: rawDB})
+	if _, err := categoryRepo.EnsureDefault(); err != nil {
+		t.Fatalf("ensure default category: %v", err)
+	}
 	_, err = repo.Create(
 		"remote:remote-1",
 		"edited english",
@@ -372,7 +417,7 @@ func TestSyncRemoteSkipsExistingRemoteRecord(t *testing.T) {
 	defer remote.Close()
 
 	store := &fakeStorageService{}
-	h := NewBackgroundPromptHandler(repo, store, nil, "")
+	h := NewBackgroundPromptHandler(repo, store, nil, "", categoryRepo)
 
 	body := strings.NewReader(`{"api_url":"` + remote.URL + `/picGet/api/media?page=1&pageSize=20"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/background-prompts/sync-remote", body)

@@ -1,0 +1,297 @@
+:root {
+  --liquid-glass-bg:
+    radial-gradient(circle at 18% 10%, rgba(144, 205, 255, 0.28), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(198, 181, 255, 0.2), transparent 28%),
+    radial-gradient(circle at 42% 92%, rgba(80, 140, 255, 0.2), transparent 30%),
+    linear-gradient(145deg, #07101f 0%, #101b31 46%, #050a14 100%);
+  --liquid-surface: rgba(255, 255, 255, 0.095);
+  --liquid-surface-strong: rgba(255, 255, 255, 0.155);
+  --liquid-surface-soft: rgba(255, 255, 255, 0.058);
+  --liquid-border: rgba(255, 255, 255, 0.28);
+  --liquid-border-soft: rgba(255, 255, 255, 0.16);
+  --liquid-highlight: rgba(255, 255, 255, 0.5);
+  --liquid-shadow: 0 24px 80px rgba(0, 0, 0, 0.34), 0 4px 24px rgba(112, 170, 255, 0.12);
+  --liquid-shadow-hover: 0 30px 100px rgba(0, 0, 0, 0.42), 0 10px 34px rgba(132, 190, 255, 0.18);
+  --liquid-blur: blur(30px) saturate(180%);
+  --liquid-blur-strong: blur(42px) saturate(210%);
+  --liquid-radius: 1.45rem;
+  --liquid-radius-lg: 2rem;
+  --bg: #07101f;
+  --panel: var(--liquid-surface);
+  --panel-strong: rgba(13, 24, 43, 0.72);
+  --line: var(--liquid-border-soft);
+  --line-strong: var(--liquid-border);
+  --shadow: var(--liquid-shadow);
+}
+
+body {
+  background: var(--liquid-glass-bg);
+}
+
+.app-shell::before {
+  background:
+    linear-gradient(180deg, rgba(8, 14, 27, 0.22), rgba(6, 10, 20, 0.68)),
+    var(--brand-background-image),
+    var(--liquid-glass-bg);
+}
+
+.control-rail,
+.topbar,
+.status-pill,
+.glass-section,
+.history-sidebar,
+.centered-panel,
+.auth-card,
+.logout-modal,
+.modal-content,
+.image-preview-modal,
+.qr-modal-content,
+.table-shell,
+.sidebar-card,
+.gallery-card,
+.history-card,
+.preview-stage,
+.capture-stage,
+.capture-shell,
+.rendering-shell,
+.history-panel,
+.table-panel,
+.category-management,
+.background-category-panel {
+  border-color: var(--liquid-border-soft) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.055) 48%, rgba(255, 255, 255, 0.035)),
+    rgba(10, 20, 38, 0.52) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+    var(--liquid-shadow) !important;
+  backdrop-filter: var(--liquid-blur) !important;
+  -webkit-backdrop-filter: var(--liquid-blur) !important;
+}
+
+.glass-section,
+.history-sidebar,
+.centered-panel,
+.auth-card,
+.logout-modal,
+.image-preview-modal,
+.qr-modal-content {
+  border-radius: var(--liquid-radius-lg) !important;
+}
+
+.control-rail,
+.status-pill {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.065)),
+    rgba(8, 16, 31, 0.54) !important;
+}
+
+.control-rail button,
+.sidebar-search button,
+.auth-submit,
+.auth-secondary,
+.glass-button-base,
+.header-icon,
+.slider-button,
+.soft-button,
+.tiny-chip,
+.ghost-pill,
+.mini-outline,
+.style-chip,
+.pager-badge,
+.countdown-badge,
+.render-pill,
+.camera-badge,
+.gallery-preview-button,
+.image-preview-close,
+.history-select-button,
+.preview-download-btn,
+.qr-close-btn {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--liquid-border) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.075) 52%, rgba(255, 255, 255, 0.04)),
+    rgba(12, 24, 44, 0.48) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.035) !important;
+  backdrop-filter: blur(24px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+}
+
+.control-rail button::before,
+.sidebar-search button::before,
+.auth-submit::before,
+.auth-secondary::before,
+.glass-button-base::before,
+.header-icon::before,
+.slider-button::before,
+.soft-button::before,
+.tiny-chip::before,
+.ghost-pill::before,
+.mini-outline::before,
+.style-chip::before,
+.pager-badge::before,
+.countdown-badge::before,
+.render-pill::before,
+.camera-badge::before,
+.gallery-preview-button::before,
+.image-preview-close::before,
+.history-select-button::before,
+.preview-download-btn::before,
+.qr-close-btn::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.5), transparent 36%),
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.42), transparent 30%);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.control-rail button::after,
+.sidebar-search button::after,
+.auth-submit::after,
+.auth-secondary::after,
+.glass-button-base::after,
+.header-icon::after,
+.slider-button::after,
+.soft-button::after,
+.tiny-chip::after,
+.ghost-pill::after,
+.mini-outline::after,
+.style-chip::after,
+.gallery-preview-button::after,
+.image-preview-close::after {
+  content: "";
+  position: absolute;
+  inset: auto 14% 8% 14%;
+  height: 22%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+.control-rail button:hover,
+.sidebar-search button:hover,
+.auth-submit:hover,
+.auth-secondary:hover,
+.glass-button-base:hover,
+.header-icon:hover,
+.slider-button:hover,
+.soft-button:hover,
+.tiny-chip:hover,
+.ghost-pill:hover,
+.mini-outline:hover,
+.style-chip:hover,
+.gallery-preview-button:hover,
+.image-preview-close:hover {
+  transform: translateY(-2px) scale(1.025);
+  border-color: rgba(255, 255, 255, 0.46) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.11)),
+    rgba(38, 72, 122, 0.54) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    0 18px 46px rgba(0, 0, 0, 0.34),
+    0 8px 30px rgba(120, 188, 255, 0.18) !important;
+}
+
+.control-rail button.active,
+.tiny-chip.active,
+.ghost-pill.active,
+.soft-button.primary,
+.auth-submit,
+.history-select-button[aria-pressed="true"] {
+  border-color: rgba(194, 225, 255, 0.72) !important;
+  background:
+    linear-gradient(145deg, rgba(154, 211, 255, 0.42), rgba(82, 130, 220, 0.26)),
+    rgba(42, 91, 170, 0.62) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.54),
+    0 16px 46px rgba(50, 128, 255, 0.26),
+    0 0 0 1px rgba(184, 220, 255, 0.12) !important;
+}
+
+.sidebar-search input,
+.field-block input,
+.field-block textarea,
+.field-block select,
+.modal-content input,
+.modal-content textarea,
+.modal-content select {
+  border: 1px solid var(--liquid-border-soft) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
+    rgba(9, 18, 34, 0.5) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+
+.table-header {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.055)),
+    rgba(8, 16, 31, 0.72) !important;
+  backdrop-filter: var(--liquid-blur) !important;
+  -webkit-backdrop-filter: var(--liquid-blur) !important;
+}
+
+.table-row,
+.sidebar-card,
+.gallery-card,
+.history-card {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.table-row:hover,
+.sidebar-card:hover,
+.gallery-card:hover,
+.history-card:hover {
+  border-color: rgba(255, 255, 255, 0.32) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    var(--liquid-shadow-hover) !important;
+}
+
+.modal-overlay,
+.image-preview-overlay,
+.qr-modal-overlay {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(124, 199, 255, 0.16), transparent 30%),
+    rgba(2, 6, 14, 0.68) !important;
+  backdrop-filter: var(--liquid-blur-strong) !important;
+  -webkit-backdrop-filter: var(--liquid-blur-strong) !important;
+}
+
+.brand-logo {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.1)),
+    linear-gradient(140deg, #a9d8ff 0%, #7ca7ff 45%, #a78bfa 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    0 12px 34px rgba(76, 139, 255, 0.22) !important;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .control-rail,
+  .topbar,
+  .status-pill,
+  .glass-section,
+  .history-sidebar,
+  .centered-panel,
+  .auth-card,
+  .logout-modal,
+  .modal-content,
+  .image-preview-modal,
+  .qr-modal-content {
+    background: rgba(16, 28, 48, 0.94) !important;
+  }
+}

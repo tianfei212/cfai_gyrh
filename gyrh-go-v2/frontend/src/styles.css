@@ -379,6 +379,7 @@ textarea {
   border-color: rgba(255, 181, 188, 0.35);
 }
 
+.header-icon:disabled,
 .tiny-chip:disabled,
 .slider-button:disabled {
   cursor: not-allowed;
@@ -386,6 +387,7 @@ textarea {
   transform: none;
 }
 
+.header-icon:disabled:hover,
 .tiny-chip:disabled:hover,
 .slider-button:disabled:hover {
   transform: none;
@@ -484,16 +486,12 @@ textarea {
   padding: 1.2rem;
 }
 
-.hero-workspace {
-  min-height: 24rem;
-}
-
 .section-topline {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.55rem;
 }
 
 .section-topline h2,
@@ -664,34 +662,6 @@ textarea {
   text-align: center;
 }
 
-.upload-stage {
-  display: grid;
-  place-items: center;
-  min-height: 18rem;
-  width: 100%;
-  border: 1px solid var(--line-strong);
-  border-radius: 1.35rem;
-  background:
-    radial-gradient(circle at 50% 52%, rgba(46, 73, 122, 0.48), transparent 23%),
-    rgba(18, 31, 52, 0.86);
-  text-align: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-}
-
-.upload-stage.has-image {
-  min-height: auto;
-  background: #000;
-}
-
-.upload-stage.dragging {
-  border-color: #bcd0ff;
-  background: rgba(44, 99, 186, 0.3);
-  transform: scale(1.02);
-}
-
 .close-stage-button {
   position: absolute;
   top: 1rem;
@@ -722,77 +692,6 @@ textarea {
   height: 1.2rem;
 }
 
-.hud-action-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.2);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-.upload-stage.has-image:hover .hud-action-overlay {
-  opacity: 1;
-}
-
-.hud-use-button {
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 1rem 2.5rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
-  font-size: 1.2rem;
-  font-weight: 600;
-  backdrop-filter: blur(20px);
-  box-shadow: 
-    0 10px 40px rgba(0, 0, 0, 0.4),
-    inset 0 1px 1px rgba(255, 255, 255, 0.2);
-  transform: translateY(20px);
-  transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-  cursor: pointer;
-}
-
-.upload-stage.has-image:hover .hud-use-button {
-  transform: translateY(0);
-}
-
-.hud-use-button:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: scale(1.05) !important;
-  box-shadow: 
-    0 15px 50px rgba(0, 0, 0, 0.5),
-    inset 0 1px 2px rgba(255, 255, 255, 0.3);
-}
-
-.hud-use-button:active {
-  transform: scale(0.95) !important;
-}
-
-.hud-use-button svg {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
-.upload-stage:hover {
-  border-color: rgba(188, 208, 255, 0.5);
-  background:
-    radial-gradient(circle at 50% 52%, rgba(60, 95, 155, 0.58), transparent 25%),
-    rgba(22, 38, 64, 0.9);
-  transform: scale(1.01);
-}
-
-.upload-stage:active {
-  transform: scale(0.99);
-}
-
 .upload-badge {
   width: 4.75rem;
   height: 4.75rem;
@@ -804,20 +703,15 @@ textarea {
   height: 2rem;
 }
 
-.upload-stage h3,
 .preview-label strong,
 .capture-title strong {
   margin: 1rem 0 0.4rem;
   font-size: clamp(1.2rem, 2vw, 2rem);
 }
 
-.upload-stage p {
-  margin: 0;
-  color: var(--muted);
-}
-
 .gallery-section {
-  min-height: 46rem;
+  position: relative;
+  min-height: 58rem;
 }
 
 .gallery-grid {
@@ -837,7 +731,7 @@ textarea {
 }
 
 .gallery-card {
-  min-height: 16.5rem;
+  min-height: 15.2rem;
   padding: 1rem;
   display: flex;
   align-items: flex-end;
@@ -858,6 +752,42 @@ textarea {
 .gallery-card > span {
   position: relative;
   z-index: 1;
+}
+
+.gallery-preview-button {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border: 1px solid rgba(186, 214, 255, 0.48);
+  border-radius: 999px;
+  color: #f4f8ff;
+  background: rgba(12, 20, 34, 0.58);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  opacity: 0.88;
+  transition: transform 0.18s ease, opacity 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.gallery-preview-button:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(50, 91, 161, 0.72);
+}
+
+.gallery-preview-button svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .tone-blue {
@@ -1120,6 +1050,34 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.1);
   z-index: 10;
   pointer-events: none;
+}
+
+.preview-style-badge {
+  position: absolute;
+  right: 2rem;
+  bottom: 2rem;
+  z-index: 10;
+  max-width: min(42%, 22rem);
+  padding: 0.55rem 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06)),
+    rgba(0, 0, 0, 0.34);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: clamp(0.72rem, 1vw, 0.9rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .hud-logo-mark {
@@ -1496,7 +1454,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: 2%;
+  overflow: hidden;
   background:
     radial-gradient(circle at 30% 20%, rgba(118, 151, 210, 0.2), transparent 28%),
     rgba(3, 8, 18, 0.78);
@@ -1504,24 +1463,28 @@ textarea {
 }
 
 .image-preview-modal {
-  width: min(1180px, 94vw);
-  max-height: 92vh;
+  width: 94%;
+  height: 92%;
+  max-width: 94%;
+  max-height: 92%;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 2%;
+  padding: 1.5%;
   border: 1px solid rgba(132, 157, 196, 0.36);
-  border-radius: 1.35rem;
+  border-radius: 2%;
   background: rgba(12, 20, 34, 0.82);
   box-shadow: 0 32px 90px rgba(0, 0, 0, 0.46);
+  overflow: hidden;
 }
 
 .image-preview-header {
+  flex: 0 0 8%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.2rem 0.25rem 0;
+  gap: 2%;
+  padding: 0.5% 0.5% 0;
 }
 
 .image-preview-header p,
@@ -1541,25 +1504,55 @@ textarea {
   font-weight: 700;
 }
 
+.image-preview-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border: 1px solid rgba(186, 214, 255, 0.42);
+  border-radius: 999px;
+  color: #f4f8ff;
+  background: rgba(12, 20, 34, 0.62);
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.image-preview-close:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(50, 91, 161, 0.72);
+}
+
+.image-preview-close svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 .image-preview-stage {
-  min-height: 18rem;
-  max-height: calc(92vh - 6.5rem);
+  flex: 1 1 88%;
+  height: 88%;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid rgba(97, 119, 153, 0.3);
-  border-radius: 1rem;
+  border-radius: 1.5%;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
     rgba(3, 8, 18, 0.58);
 }
 
 .image-preview-stage img {
+  width: 100%;
+  height: 100%;
   max-width: 100%;
-  max-height: calc(92vh - 7rem);
+  max-height: 100%;
   object-fit: contain;
-  border-radius: 0.8rem;
+  border-radius: 1%;
   box-shadow: 0 18px 55px rgba(0, 0, 0, 0.36);
 }
 
@@ -2093,6 +2086,12 @@ textarea {
     left: 1rem;
     bottom: 1rem;
     max-width: calc(100% - 2rem);
+  }
+
+  .preview-style-badge {
+    right: 1rem;
+    bottom: 1rem;
+    max-width: 46%;
   }
 
   .qr-modal-content {

@@ -83,11 +83,15 @@ func Run(ctx context.Context) error {
 	skillRepo := db.NewSkillRepo(database)
 	llmPromptTemplateRepo := db.NewLLMPromptTemplateRepo(database)
 	backgroundPromptRepo := db.NewBackgroundPromptRepo(database)
+	backgroundCategoryRepo := db.NewBackgroundCategoryRepo(database)
 	stylePromptRepo := db.NewStylePromptRepo(database)
 	rewriteTaskRepo := db.NewRewriteTaskRepo(database)
 
 	if seedErr := qwen.EnsureDefaultTemplates(llmPromptTemplateRepo, cfg.Skill.LocalPath); seedErr != nil {
 		return fmt.Errorf("初始化 Qwen 默认 Prompt 模板失败: %w", seedErr)
+	}
+	if err := backgroundCategoryRepo.EnsureDefaultBindings(); err != nil {
+		return fmt.Errorf("初始化默认背景分类绑定失败: %w", err)
 	}
 
 	llmService, err := llm.NewService(cfg, storageService, skillRepo, backgroundPromptRepo)
@@ -109,13 +113,14 @@ func Run(ctx context.Context) error {
 	referenceHandler := handler.NewReferenceHandler(referenceRepo, storageService)
 	skillHandler := handler.NewSkillHandler(skillRepo, llmPromptTemplateRepo)
 	llmPromptTemplateHandler := handler.NewLLMPromptTemplateHandler(llmPromptTemplateRepo)
-	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor, cfg.Gallery.ExternalURL)
+	backgroundPromptHandler := handler.NewBackgroundPromptHandler(backgroundPromptRepo, storageService, qwenAdvisor, cfg.Gallery.ExternalURL, backgroundCategoryRepo)
+	backgroundCategoryHandler := handler.NewBackgroundCategoryHandler(backgroundCategoryRepo)
 	stylePromptHandler := handler.NewStylePromptHandler(stylePromptRepo)
 	frontendAuthService := frontendauthapp.NewService(cfg.FrontendAuth, rootDir)
 	frontendAuthHandler := handler.NewFrontendAuthHandler(frontendAuthService)
 
 	router := mux.NewRouter()
-	api.RegisterRoutes(router, imageHandler, referenceHandler, skillHandler, llmPromptTemplateHandler, backgroundPromptHandler, stylePromptHandler, frontendAuthHandler, &middleware.AuthConfig{
+	api.RegisterRoutes(router, imageHandler, referenceHandler, skillHandler, llmPromptTemplateHandler, backgroundPromptHandler, backgroundCategoryHandler, stylePromptHandler, frontendAuthHandler, &middleware.AuthConfig{
 		PrivateKeyFetcher: func(publicKey string) string {
 			if configuredPublicKey := os.Getenv("GYRH_AUTH_PUBLIC_KEY"); configuredPublicKey != "" && configuredPublicKey == publicKey {
 				return os.Getenv("GYRH_AUTH_PRIVATE_KEY")

@@ -46,6 +46,7 @@ func rewriteTaskFromDB(task *db.RewriteTask) rewriteTask {
 			ID:       task.ImageID,
 			AssetID:  task.AssetID,
 			ImageURL: task.ImageURL,
+			Style:    task.StyleName,
 			Status:   task.Status,
 			Message:  "图像改写成功",
 		}
@@ -173,6 +174,7 @@ func (s *rewriteTaskStore) update(id string, status rewriteTaskStatus, resp *Rew
 type rewriteJob struct {
 	Request            RewriteRequest
 	StylePrompt        string
+	StyleName          string
 	Inputs             []llm.ImageInput
 	BackgroundPromptID int64
 	ExternalTaskID     string

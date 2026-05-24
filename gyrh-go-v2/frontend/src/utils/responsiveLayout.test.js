@@ -12,9 +12,14 @@ function readSource(relativePath) {
 }
 
 const styles = readSource('styles.css');
+const mainEntry = readSource('main.jsx');
 const kioskStyles = readSource('theme/kiosk.css');
 const previewScreen = readSource('screens/PreviewScreen.jsx');
 const styleManagerScreen = readSource('screens/StyleManagerScreen.jsx');
+
+test('main entry loads the liquid glass skin', () => {
+  assert.match(mainEntry, /import\s+['"]\.\/theme\/liquid-glass\.css['"]/);
+});
 
 test('global layout uses dynamic viewport units for fullscreen adaptation', () => {
   assert.match(styles, /--app-viewport-height:\s*100dvh/);

@@ -1,0 +1,18 @@
+---
+description: Always inspect CHANGELOG before project work
+alwaysApply: true
+---
+
+# Check CHANGELOG First
+
+Before doing any task in this repository, read `CHANGELOG.md` first and use it to understand recent work, release history, UI/theme decisions, and branch context.
+
+This is mandatory before:
+
+- editing code, configs, docs, or release files;
+- building release artifacts or copying built frontend assets;
+- committing, tagging, pushing, or creating PRs;
+- diagnosing regressions, especially UI/theme/layout changes.
+
+When work touches the frontend or release packaging, compare the current branch against the history recorded in `CHANGELOG.md` so previously shipped UI skin, liquid glass styling, responsive shell, and window/layout adjustments are not accidentally dropped.
+

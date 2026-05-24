@@ -96,6 +96,7 @@ func migrateTables(db *sql.DB) error {
 			task_id TEXT PRIMARY KEY,
 			external_task_id TEXT NOT NULL DEFAULT '',
 			provider TEXT NOT NULL DEFAULT '',
+			style_name TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'running',
 			background_prompt_id INTEGER NOT NULL DEFAULT 0,
 			image_id INTEGER NOT NULL DEFAULT 0,
@@ -109,6 +110,7 @@ func migrateTables(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("创建 image_rewrite_tasks 表失败: %w", err)
 	}
+	_, _ = db.Exec("ALTER TABLE image_rewrite_tasks ADD COLUMN style_name TEXT NOT NULL DEFAULT ''")
 
 	// 创建 reference_images 表（参考图像记录）
 	_, err = db.Exec(`
@@ -177,6 +179,31 @@ func migrateTables(db *sql.DB) error {
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gpt_prompt_zh TEXT NOT NULL DEFAULT ''")
 	_, _ = db.Exec("ALTER TABLE background_prompts ADD COLUMN gpt_negative_prompt_zh TEXT NOT NULL DEFAULT ''")
 
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS background_categories (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			parent_name TEXT NOT NULL,
+			child_name TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建背景分类表失败: %w", err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS background_category_bindings (
+			category_id INTEGER NOT NULL,
+			background_prompt_id INTEGER NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (category_id, background_prompt_id)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("创建背景分类绑定表失败: %w", err)
+	}
+
 	// 创建 llm_prompt_templates 表（大模型提示词模板）
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS llm_prompt_templates (
@@ -217,6 +244,8 @@ func migrateTables(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_skill_files_is_active ON skill_files(is_active)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_background_prompts_name ON background_prompts(name)`,
 		`CREATE INDEX IF NOT EXISTS idx_background_prompts_updated_at ON background_prompts(updated_at)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_background_categories_parent_child ON background_categories(parent_name, child_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_background_category_bindings_background ON background_category_bindings(background_prompt_id)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_prompt_templates_key ON llm_prompt_templates(template_key)`,
 		`CREATE INDEX IF NOT EXISTS idx_llm_prompt_templates_updated_at ON llm_prompt_templates(updated_at)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_style_prompts_name ON style_prompts(name)`,

@@ -1,45 +1,104 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { WorkbenchLayout, HeaderIcon, HistorySidebar } from '../components/Layout';
 import { RefreshingImage } from '../components/RefreshingImage';
-import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon, CameraIcon } from '../components/Icons';
+import { HomeIcon, StackIcon, ExitIcon, PlusIcon, ImageIcon, SearchIcon, RefreshIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from '../components/Icons';
 import { DEFAULT_BRANDING } from '../config/branding';
+import { fetchApi } from '../services/api';
 import {
   buildCaptureBackgroundThumbnailUrl,
+  buildFullImagePreviewUrl,
   buildImageThumbnailUrl,
   getImagePreloadUrls,
   preloadImages,
 } from '../utils/imageThumbs';
 import { getModelLabel, isGPTModel } from '../utils/modelProvider';
+import { getTotalPages } from '../utils/backgroundPagination';
+
+const DEFAULT_BACKGROUND_CATEGORY_PARENT = '场景';
+const DEFAULT_BACKGROUND_CATEGORY_CHILD = '电影';
+
+function formatCategoryLabel(category) {
+  const parentName = category?.parent_name || 'default';
+  const childName = category?.child_name || 'default';
+  return `${parentName}/${childName}`;
+}
+
+function isDefaultWorkbenchCategory(category) {
+  return category?.parent_name === DEFAULT_BACKGROUND_CATEGORY_PARENT && category?.child_name === DEFAULT_BACKGROUND_CATEGORY_CHILD;
+}
 
 export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, onToggleModel, onCapture, onPreview, backgroundCache, model, branding = DEFAULT_BRANDING }) {
   const fileInputRef = useRef(null);
-  const [uploadedImage, setUploadedImage] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const backgroundRequestSeq = useRef(0);
   const [backgrounds, setBackgrounds] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const limit = 6;
+  const [previewingBackground, setPreviewingBackground] = useState(null);
+  const limit = 9;
+  const selectedCategory = categories.find(category => category.id === selectedCategoryId);
+  const totalPages = getTotalPages(total, limit);
+  const previewImageUrl = buildFullImagePreviewUrl({
+    assetId: previewingBackground?.image_asset_id,
+    imageUrl: previewingBackground?.image_url,
+  });
 
   const fetchBackgrounds = async ({ force = false } = {}) => {
-    if (!backgroundCache) return;
+    if (!backgroundCache || selectedCategoryId === null) return;
+    if (selectedCategoryId === 0) {
+      setBackgrounds([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+    const requestId = backgroundRequestSeq.current + 1;
+    backgroundRequestSeq.current = requestId;
     try {
       setLoading(true);
-      const data = await backgroundCache.loadPage(page, { limit, force });
+      const data = await backgroundCache.loadPage(page, { limit, force, categoryId: selectedCategoryId });
+      if (requestId !== backgroundRequestSeq.current) {
+        return;
+      }
       const nextItems = data.items || data.prompts || [];
       setBackgrounds(nextItems);
       setTotal(data.total || 0);
       preloadImages(getImagePreloadUrls(nextItems));
     } catch (err) {
-      console.error('Failed to fetch backgrounds:', err);
+      if (requestId === backgroundRequestSeq.current) {
+        console.error('Failed to fetch backgrounds:', err);
+      }
     } finally {
+      if (requestId === backgroundRequestSeq.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const data = await fetchApi('/api/v1/background-categories');
+      const nextCategories = data || [];
+      const defaultCategory = nextCategories.find(isDefaultWorkbenchCategory);
+      setCategories(nextCategories);
+      setSelectedCategoryId(defaultCategory?.id || 0);
+    } catch (err) {
+      console.error('Failed to fetch background categories:', err);
+      setSelectedCategoryId(0);
       setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchBackgrounds();
-  }, [page]);
+  }, [page, selectedCategoryId]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   const handlePrevPage = () => {
     if (page > 1) {
@@ -48,9 +107,15 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
   };
 
   const handleNextPage = () => {
-    if (page * limit < total) {
+    if (page < totalPages) {
       setPage(page + 1);
     }
+  };
+
+  const handleSelectCategory = (categoryId) => {
+    setSelectedCategoryId(categoryId);
+    setPage(1);
+    setCategoryPickerOpen(false);
   };
 
   const handleUploadClick = () => {
@@ -70,18 +135,17 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
     }
   };
 
-  const handleRemoveImage = (e) => {
+  const handlePreviewBackground = (image) => (e) => {
     e.stopPropagation();
-    setUploadedImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    setPreviewingBackground(image);
   };
 
   const processFile = (file) => {
     if (file && file.type.startsWith('image/')) {
       const imageUrl = URL.createObjectURL(file);
-      setUploadedImage(imageUrl);
+      if (onCapture) {
+        onCapture(imageUrl);
+      }
       console.log('File processed:', file.name);
     }
   };
@@ -91,26 +155,34 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
     processFile(file);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const file = e.dataTransfer.files?.[0];
-    processFile(file);
-  };
+  const previewModal = previewingBackground && (
+    <div className="image-preview-overlay" onClick={() => setPreviewingBackground(null)}>
+      <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="image-preview-header">
+          <div>
+            <p>背景图预览</p>
+            <h3>{previewingBackground.name || `背景 ${previewingBackground.id}`}</h3>
+          </div>
+          <button
+            className="image-preview-close"
+            type="button"
+            onClick={() => setPreviewingBackground(null)}
+            aria-label="关闭预览"
+            title="关闭"
+          >
+            <XIcon />
+          </button>
+        </div>
+        <div className="image-preview-stage">
+          {previewImageUrl ? (
+            <RefreshingImage src={previewImageUrl} alt={previewingBackground.name || '背景图预览'} />
+          ) : (
+            <div style={{ padding: '2%', color: 'rgba(255,255,255,0.65)' }}>暂无可预览图片</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <WorkbenchLayout
@@ -118,7 +190,7 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
       branding={branding}
       headerActions={
         <>
-          <HeaderIcon label={getModelLabel(model)} onClick={onToggleModel} />
+          <HeaderIcon label={getModelLabel(model)} disabled title="模型暂时锁定" />
           <HeaderIcon icon={<HomeIcon />} onClick={onHome} />
           <HeaderIcon icon={<StackIcon />} onClick={onHistory} />
           <HeaderIcon icon={<ExitIcon />} onClick={onLogout} />
@@ -128,85 +200,52 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
         <HistorySidebar onPreview={onPreview} />
       }
     >
-      <section className="glass-section hero-workspace">
-        <div className="section-topline">
-          <h2>快速选择场景</h2>
-          <span>{page} / {Math.ceil(total / limit) || 1}</span>
-        </div>
-        <div 
-          className={`upload-stage ${isDragging ? 'dragging' : ''} ${uploadedImage ? 'has-image' : ''}`}
-          onClick={handleUploadClick}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          style={{ 
-            cursor: 'pointer'
-          }}
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-            accept="image/*"
-          />
-          
-          {uploadedImage ? (
-            <>
-              <img 
-                src={uploadedImage} 
-                alt="Uploaded background" 
-                style={{ 
-                  width: '100%', 
-                  height: 'auto', 
-                  maxHeight: '70vh',
-                  objectFit: 'contain',
-                  display: 'block'
-                }} 
-              />
-              <button 
-                className="close-stage-button"
-                onClick={handleRemoveImage}
-                type="button"
-                aria-label="Remove image"
-              >
-                <XIcon />
-              </button>
-              <div className="hud-action-overlay">
-                <button 
-                  className="hud-use-button"
-                  onClick={handleUseImage(uploadedImage)}
-                  type="button"
-                >
-                  <CameraIcon />
-                  <span>使用</span>
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="upload-badge">
-                <PlusIcon />
-              </div>
-              <h3>点击或拖拽上传背景图</h3>
-              <p>支持 JPG / PNG / WebP，建议 4K 高清图</p>
-            </>
-          )}
-        </div>
-      </section>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+        accept="image/*"
+      />
 
       <section className="glass-section gallery-section">
         <div className="section-topline">
-          <h2>背景图库</h2>
+          <h2>{selectedCategory ? `背景图库 · ${formatCategoryLabel(selectedCategory)}` : '背景图库'}</h2>
           <div className="topbar-actions">
-            <button className="ghost-pill icon-pill" type="button" onClick={() => fetchBackgrounds({ force: true })}>
+            <button
+              className="ghost-pill icon-pill liquid-glass-button"
+              type="button"
+              onClick={handleUploadClick}
+              aria-label="上传背景图"
+              title="上传背景图"
+            >
+              <PlusIcon />
+            </button>
+            <button className={`ghost-pill liquid-glass-button ${selectedCategoryId ? 'active' : ''}`} type="button" onClick={() => setCategoryPickerOpen(open => !open)}>
+              类型
+            </button>
+            <button className="ghost-pill icon-pill liquid-glass-button" type="button" onClick={() => fetchBackgrounds({ force: true })}>
               <RefreshIcon />
             </button>
-            <button className="ghost-pill icon-pill" type="button" onClick={onBackgrounds}>
+            <button className="ghost-pill icon-pill liquid-glass-button" type="button" onClick={onBackgrounds}>
               <ImageIcon />
             </button>
           </div>
         </div>
+        {categoryPickerOpen && (
+          <div className="chip-row compact" style={{ marginBottom: '1rem' }}>
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                className={`tiny-chip ${selectedCategoryId === category.id ? 'active' : ''}`}
+                type="button"
+                onClick={() => handleSelectCategory(category.id)}
+              >
+                {formatCategoryLabel(category)}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="gallery-grid">
           {loading ? (
              <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>加载中...</div>
@@ -224,6 +263,17 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
                 {card.image_url || card.image_asset_id ? (
                   <RefreshingImage src={buildImageThumbnailUrl({ assetId: card.image_asset_id, imageUrl: card.image_url })} alt={card.name || `背景 ${card.id}`} />
                 ) : null}
+                {(card.image_url || card.image_asset_id) && (
+                  <button
+                    className="gallery-preview-button"
+                    type="button"
+                    onClick={handlePreviewBackground(card)}
+                    aria-label={`放大预览 ${card.name || `背景 ${card.id}`}`}
+                    title="放大"
+                  >
+                    <SearchIcon />
+                  </button>
+                )}
                 <span style={{ background: 'rgba(0,0,0,0.5)', padding: '2px 8px', borderRadius: '4px' }}>{card.name || `背景 ${card.id}`}</span>
               </article>
             ))
@@ -243,13 +293,14 @@ export function DashboardScreen({ onHome, onHistory, onBackgrounds, onLogout, on
             className="slider-button" 
             type="button" 
             onClick={handleNextPage} 
-            disabled={page * limit >= total || loading}
-            style={{ opacity: (page * limit >= total || loading) ? 0.5 : 1, cursor: (page * limit >= total || loading) ? 'not-allowed' : 'pointer' }}
+            disabled={page >= totalPages || loading}
+            style={{ opacity: (page >= totalPages || loading) ? 0.5 : 1, cursor: (page >= totalPages || loading) ? 'not-allowed' : 'pointer' }}
           >
             <ChevronRightIcon />
           </button>
         </div>
       </section>
+      {previewModal && typeof document !== 'undefined' ? createPortal(previewModal, document.body) : previewModal}
     </WorkbenchLayout>
   );
 }

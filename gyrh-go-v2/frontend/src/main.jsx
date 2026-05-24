@@ -6,6 +6,7 @@ import './theme/glass.css';
 import './theme/admin.css';
 import './theme/kiosk.css';
 import './styles.css';
+import './theme/liquid-glass.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

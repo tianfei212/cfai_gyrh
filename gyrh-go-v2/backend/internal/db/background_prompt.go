@@ -190,6 +190,33 @@ func (r *BackgroundPromptRepo) List(limit, offset int) ([]*BackgroundPrompt, err
 	return r.scanBackgroundPrompts(rows)
 }
 
+// ListByCategory 获取指定类型组合下的背景图提示词模板列表。
+func (r *BackgroundPromptRepo) ListByCategory(categoryID int64, limit, offset int) ([]*BackgroundPrompt, error) {
+	baseSelect := `
+		SELECT bp.id, bp.name, bp.gemini_prompt, bp.gemini_negative_prompt, bp.gemini_prompt_zh, bp.gemini_negative_prompt_zh, bp.wan_prompt, bp.wan_negative_prompt, bp.wan_prompt_zh, bp.wan_negative_prompt_zh, bp.gpt_prompt, bp.gpt_negative_prompt, bp.gpt_prompt_zh, bp.gpt_negative_prompt_zh, bp.image_asset_id, bp.image_url, bp.image_width, bp.image_height, bp.created_at, bp.updated_at
+		FROM background_prompts bp
+		INNER JOIN background_category_bindings b ON b.background_prompt_id = bp.id
+		WHERE b.category_id = ?
+		ORDER BY bp.updated_at DESC, bp.id DESC
+	`
+
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if limit > 0 {
+		rows, err = r.db.Query(baseSelect+" LIMIT ? OFFSET ?", categoryID, limit, offset)
+	} else {
+		rows, err = r.db.Query(baseSelect, categoryID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("按类型查询背景图提示词模板列表失败: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanBackgroundPrompts(rows)
+}
+
 // Update 更新背景图提示词模板。
 func (r *BackgroundPromptRepo) Update(id int64, patch BackgroundPromptPatch) error {
 	setClauses := []string{}
@@ -289,20 +316,26 @@ func (r *BackgroundPromptRepo) Update(id int64, patch BackgroundPromptPatch) err
 
 // Delete 删除背景图提示词模板。
 func (r *BackgroundPromptRepo) Delete(id int64) error {
-	result, err := r.db.Exec("DELETE FROM background_prompts WHERE id = ?", id)
-	if err != nil {
-		return fmt.Errorf("删除背景图提示词模板失败: %w", err)
-	}
+	return r.db.Transaction(func(tx *sql.Tx) error {
+		if _, err := tx.Exec("DELETE FROM background_category_bindings WHERE background_prompt_id = ?", id); err != nil {
+			return fmt.Errorf("删除背景图提示词分类绑定失败: %w", err)
+		}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("获取受影响行数失败: %w", err)
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("背景图提示词模板不存在: id=%d", id)
-	}
+		result, err := tx.Exec("DELETE FROM background_prompts WHERE id = ?", id)
+		if err != nil {
+			return fmt.Errorf("删除背景图提示词模板失败: %w", err)
+		}
 
-	return nil
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("获取受影响行数失败: %w", err)
+		}
+		if rowsAffected == 0 {
+			return fmt.Errorf("背景图提示词模板不存在: id=%d", id)
+		}
+
+		return nil
+	})
 }
 
 // Count 获取背景图提示词模板总数。
@@ -310,6 +343,20 @@ func (r *BackgroundPromptRepo) Count() (int64, error) {
 	var count int64
 	if err := r.db.QueryRow("SELECT COUNT(*) FROM background_prompts").Scan(&count); err != nil {
 		return 0, fmt.Errorf("统计背景图提示词模板失败: %w", err)
+	}
+	return count, nil
+}
+
+// CountByCategory 获取指定类型组合下背景图提示词模板总数。
+func (r *BackgroundPromptRepo) CountByCategory(categoryID int64) (int64, error) {
+	var count int64
+	if err := r.db.QueryRow(`
+		SELECT COUNT(*)
+		FROM background_prompts bp
+		INNER JOIN background_category_bindings b ON b.background_prompt_id = bp.id
+		WHERE b.category_id = ?
+	`, categoryID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("按类型统计背景图提示词模板失败: %w", err)
 	}
 	return count, nil
 }
