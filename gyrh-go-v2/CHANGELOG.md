@@ -30,6 +30,7 @@
 - `npm --prefix frontend run build -- --outDir ../backend/internal/frontend/dist --emptyOutDir` 通过，已验证恢复后的前端可被 Go embed 构建目录接收。
 - `go test ./internal/api/handler ./internal/db ./internal/frontend ./internal/application/frontendauth ./internal/platform/app` 通过，确认背景分类、登录鉴权、内嵌前端和后端装配可用。
 - 已检查嵌入式构建 CSS 包含 `--liquid-glass-bg`、`--liquid-surface` 等液体玻璃变量。
+- 本地验证服务已从 `fix/3.0.3-restore-liquid-glass` 分支启动在 `127.0.0.1:9913`，并挂接主工作区数据库 `/Users/derekt/devop/展厅在更新项目/gyrh/gyrh-go-v2/backend/data/gyrh.db`；`/login` 与 `/api/v1/health` 均返回 `200`。
 
 ## 2026-05-24 01:10
 
